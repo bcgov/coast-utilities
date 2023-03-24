@@ -43,7 +43,6 @@ namespace CASInterfaceService.Pages.Controllers
         [HttpPost]
         public CornetTransactionRegistrationReply RegisterCornetTransaction(CornetTransaction cornetTransaction)
         {
-            Console.WriteLine(cornetTransaction.event_dtm + " cornetTransaction");
             Console.WriteLine(DateTime.Now + " In RegisterCornetTransaction");
             CornetTransactionRegistrationReply cornetregreply = new CornetTransactionRegistrationReply();
             CornetTransactionRegistration.getInstance().Add(cornetTransaction);
