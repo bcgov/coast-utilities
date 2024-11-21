@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'bcgov'
     env:
-      CORNET_INTERFACE_SERVICE_DOCKERFILE_PATH: ./CornetInterfaceService/CornetInterfaceService/Dockerfile
+      CORNET_INTERFACE_SERVICE_DOCKERFILE_PATH: ./CornetInterfaceService/Dockerfile
 
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
       - name: Pull image
         run: docker pull $IMAGE_ID || true
 
-      - name: Build and push vsu-app
+      - name: Build and push CornetInterfaceService
         uses: docker/build-push-action@v6
         with:
           build-args: |
