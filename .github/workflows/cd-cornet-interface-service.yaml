@@ -9,7 +9,7 @@ on:
 
 env:
   BUILD_ID: ${{ github.server_url }}!${{ github.repository }}!${{ github.ref_name }}!${{ github.sha }}!${{ github.run_number }}
-  IMAGE_NAME: vsu
+  IMAGE_NAME: cornet-interface-service
   IMAGE_REGISTRY: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}
 
 jobs:
