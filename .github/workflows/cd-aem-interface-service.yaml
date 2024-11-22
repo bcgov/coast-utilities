@@ -1,0 +1,48 @@
+name: cd-aem-interface-service
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'AEMInterfaceService/**'
+      - '.github/workflows/cd-aem-interface-service.yml'
+
+env:
+  BUILD_ID: ${{ github.server_url }}!${{ github.repository }}!${{ github.ref_name }}!${{ github.sha }}!${{ github.run_number }}
+  IMAGE_NAME: aem-interface-service
+  IMAGE_REGISTRY: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}
+
+jobs:
+  build-aem-interface-service:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'bcgov'
+    env:
+      AEM_INTERFACE_SERVICE_DOCKERFILE_PATH: ./AEMInterfaceService/AEMInterfaceService/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx tooling
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into OpenShift Registry
+        uses: docker/login-action@v3
+        with:
+            registry: ${{ env.IMAGE_REGISTRY }}
+            username: ${{ secrets.OCP4_USERNAME }}
+            password: ${{ secrets.OCP4_PASSWORD }}
+
+      - name: Pull image
+        run: docker pull $IMAGE_ID || true
+
+      - name: Build and push vsu-app
+        uses: docker/build-push-action@v6
+        with:
+          build-args: |
+            BUILD_ID="${{ env.BUILD_ID }}"
+          cache-from: |
+            ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          file: ${{ env.AEM_INTERFACE_SERVICE_DOCKERFILE_PATH }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:dev
