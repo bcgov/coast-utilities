@@ -1,23 +1,23 @@
-name: cd-cornet-interface-service
+name: cd-cas-interface-service
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'CornetInterfaceService/**'
-      - '.github/workflows/cd-cornet-interface-service.yml'
+      - 'CASInterfaceService/**'
+      - '.github/workflows/cd-cas-interface-service.yaml'
 
 env:
   BUILD_ID: ${{ github.server_url }}!${{ github.repository }}!${{ github.ref_name }}!${{ github.sha }}!${{ github.run_number }}
-  IMAGE_NAME: cornet-interface-service
+  IMAGE_NAME: cas-interface-service
   IMAGE_REGISTRY: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}
 
 jobs:
-  build-cornet-interface-service:
+  build-cas-interface-service:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'bcgov'
     env:
-      CORNET_INTERFACE_SERVICE_DOCKERFILE_PATH: ./CornetInterfaceService/Dockerfile
+      CAS_INTERFACE_SERVICE_DOCKERFILE_PATH: ./CASInterfaceService/CASInterfaceService/Dockerfile
 
     steps:
       - uses: actions/checkout@v4
@@ -33,31 +33,16 @@ jobs:
             password: ${{ secrets.OCP4_PASSWORD }}
 
       - name: Pull image
-        run: docker pull ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:dev || true
-        
+        run: docker pull $IMAGE_ID || true
 
-      - name: Bump version
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag_prefix: ${{ env.IMAGE_NAME }}=v
-          fetch_all_tags: true
-
-
-      - name: Create version env var
-        run: echo "BUILD_VERSION=$(echo '${{ steps.tag_version.outputs.new_tag }}' | awk -F-v '{print $NF}')" >> $GITHUB_ENV
-
-
-      - name: Build and push CornetInterfaceService
+      - name: Build and push CASInterfaceService
         uses: docker/build-push-action@v6
         with:
           build-args: |
             BUILD_ID="${{ env.BUILD_ID }}"
-            BUILD_VERSION=${{ env.BUILD_VERSION }}
           cache-from: |
             ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          file: ${{ env.CORNET_INTERFACE_SERVICE_DOCKERFILE_PATH }}
+          file: ${{ env.CAS_INTERFACE_SERVICE_DOCKERFILE_PATH }}
           push: true
           tags: |
             ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:dev

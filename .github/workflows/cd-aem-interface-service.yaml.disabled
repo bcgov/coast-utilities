@@ -33,28 +33,13 @@ jobs:
             password: ${{ secrets.OCP4_PASSWORD }}
 
       - name: Pull image
-        run: docker pull ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:dev || true
+        run: docker pull $IMAGE_ID || true
 
-
-      - name: Bump version
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag_prefix: ${{ env.IMAGE_NAME }}=v
-          fetch_all_tags: true
-
-
-      - name: Create version env var
-        run: echo "BUILD_VERSION=$(echo '${{ steps.tag_version.outputs.new_tag }}' | awk -F-v '{print $NF}')" >> $GITHUB_ENV
-
-
-      - name: Build and push aem-interface-service
+      - name: Build and push vsu-app
         uses: docker/build-push-action@v6
         with:
           build-args: |
             BUILD_ID="${{ env.BUILD_ID }}"
-            BUILD_VERSION=${{ env.BUILD_VERSION }}
           cache-from: |
             ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           file: ${{ env.AEM_INTERFACE_SERVICE_DOCKERFILE_PATH }}
