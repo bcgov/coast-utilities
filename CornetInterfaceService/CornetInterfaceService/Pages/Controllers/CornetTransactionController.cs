@@ -47,47 +47,54 @@ namespace CASInterfaceService.Pages.Controllers
             CornetTransactionRegistrationReply cornetregreply = new CornetTransactionRegistrationReply();
             CornetTransactionRegistration.getInstance().Add(cornetTransaction);
             Console.WriteLine(DateTime.Now + " Received data from Cornet");
-
-            var t = Task.Run(() => CallDynamicsWithCornetData(_configuration, cornetTransaction));
-            t.Wait();
-            Console.WriteLine(DateTime.Now + " Sent data to Dynamics");
-
-            if (t.Result.Contains("Cornet Notification "))
+            try
             {
-                cornetregreply.ResponseCode = "200";
-                cornetregreply.ResponseMessage = "Success";
-                Console.WriteLine(DateTime.Now + " Response Success");
-            }
-            else
-            {
-                //JObject tempJson = JObject.Parse(t.Result);
-                //CornetDynamicsReply replyJson = new CornetDynamicsReply();
+                var t = Task.Run(() => CallDynamicsWithCornetData(_configuration, cornetTransaction));
+                t.Wait();
+                Console.WriteLine(DateTime.Now + " Sent data to Dynamics");
 
-                //if (t.IsCompletedSuccessfully == true)
-                //{
-                //    cornetregreply.ResponseMessage = "Success";
-                //    cornetregreply.ResponseCode = null;// t.Result;
-                //    Console.WriteLine(DateTime.Now + " Response Success");
-                //}
-                //else
-                //{
+                if (t.Result.Contains("Cornet Notification "))
+                {
+                    cornetregreply.ResponseCode = "200";
+                    cornetregreply.ResponseMessage = "Success";
+                    Console.WriteLine(DateTime.Now + " Response Success");
+                }
+                else
+                {
+                    //JObject tempJson = JObject.Parse(t.Result);
+                    //CornetDynamicsReply replyJson = new CornetDynamicsReply();
+
+                    //if (t.IsCompletedSuccessfully == true)
+                    //{
+                    //    cornetregreply.ResponseMessage = "Success";
+                    //    cornetregreply.ResponseCode = null;// t.Result;
+                    //    Console.WriteLine(DateTime.Now + " Response Success");
+                    //}
+                    //else
+                    //{
                     cornetregreply.ResponseMessage = "Failure";
                     cornetregreply.ResponseCode = t.Result;
                     Console.WriteLine(DateTime.Now + " Response Fail");
-                //}
+                    //}
+                }
+
+                // Responses as follows:
+                // 200 - Status OK - Automatically Done
+                // 400 - Bad Request (Malformed JSON) - Automatically Done
+                // 500 - Internal Server Error (Something wrong on our end)
+                // 201 - If anything is being created on our end based on the notification sent
+                // This next line is just a sample of how to do it:
+                //this.HttpContext.Response.StatusCode = 444;
+
+                Console.WriteLine(DateTime.Now + " Exit RegisterCornetTransaction");
+                return cornetregreply;
+
             }
-
-            // Responses as follows:
-            // 200 - Status OK - Automatically Done
-            // 400 - Bad Request (Malformed JSON) - Automatically Done
-            // 500 - Internal Server Error (Something wrong on our end)
-            // 201 - If anything is being created on our end based on the notification sent
-            // This next line is just a sample of how to do it:
-            //this.HttpContext.Response.StatusCode = 444;
-
-            Console.WriteLine(DateTime.Now + " Exit RegisterCornetTransaction");
-            return cornetregreply;
-
+            catch (Exception e)
+            {
+                Console.WriteLine(DateTime.Now + "Error Registering Cornet Transaction: " + cornetTransaction.event_message_id + "Error: " + e.Message);
+                throw (new Exception(e.Message));
+            }
         }
 
         private static async Task<string> CallDynamicsWithCornetData(IConfiguration configuration, CornetTransaction model)
