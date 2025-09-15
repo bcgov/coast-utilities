@@ -96,6 +96,8 @@ namespace CASInterfaceService.Pages.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("Error Registering Cornet Transaction: " + cornetTransaction.event_message_id, ex);
+                cornetregreply.ResponseCode = "200";
+                return cornetregreply;
             }
         }
 
