@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using CASInterfaceService.Pages.Models;
@@ -12,10 +11,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Microsoft.Rest;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using CASInterfaceService.Pages.Models.Extensions;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -31,13 +28,13 @@ namespace CASInterfaceService.Pages.Controllers
         private string secret = "";
 
         private readonly IConfiguration _configuration;
-        private readonly ILogger<CornetTransactionController> _logger;
+        private readonly ILogger _logger;
         //private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public CornetTransactionController(IConfiguration configuration, ILogger<CornetTransactionController> logger)//, IHttpContextAccessor httpContextAccessor)
+        public CornetTransactionController(IConfiguration configuration)//, IHttpContextAccessor httpContextAccessor)
         {
             _configuration = configuration;
-            _logger = logger;
+            _logger = Log.Logger;
             //_httpContextAccessor = httpContextAccessor;
         }
 
@@ -95,7 +92,7 @@ namespace CASInterfaceService.Pages.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error Registering Cornet Transaction111: {EventMessageId}", cornetTransaction.event_message_id);
+                _logger.Error(ex, "Error Registering Cornet Transaction: {EventMessageId}", cornetTransaction.event_message_id);
                 return cornetregreply;
             }
         }

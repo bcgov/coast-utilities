@@ -1,15 +1,16 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System;
+using System.Net.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
+using Serilog.Exceptions;
+
 
 namespace CASInterfaceService
 {
@@ -25,15 +26,19 @@ namespace CASInterfaceService
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddControllers().AddNewtonsoftJson();
-            
+            services.AddHttpLogging(logging =>
+            {
+                logging.CombineLogs = true;
+                logging.LoggingFields = HttpLoggingFields.All;
+                logging.RequestBodyLogLimit = 8192;
+                logging.ResponseBodyLogLimit = 8192;
+            });
+
             services.Configure<CookiePolicyOptions>(options =>
             {
-                // This lambda determines whether user consent for non-essential cookies is needed for a given request.
                 options.CheckConsentNeeded = context => true;
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
-
 
             services.AddMvc(opts =>
             {
@@ -44,6 +49,64 @@ namespace CASInterfaceService
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
+
+            if (
+                !string.IsNullOrEmpty(Configuration["SPLUNK_COLLECTOR_URL"])
+                && !string.IsNullOrEmpty(Configuration["SPLUNK_TOKEN"])
+            )
+            {
+                Serilog.Sinks.Splunk.CustomFields fields = new Serilog.Sinks.Splunk.CustomFields();
+                if (!string.IsNullOrEmpty(Configuration["SPLUNK_CHANNEL"]))
+                {
+                    fields.CustomFieldList.Add(
+                        new Serilog.Sinks.Splunk.CustomField("channel", Configuration["SPLUNK_CHANNEL"])
+                    );
+                }
+                var splunkUri = new Uri(Configuration["SPLUNK_COLLECTOR_URL"]);
+                var upperSplunkHost = splunkUri.Host?.ToUpperInvariant() ?? string.Empty;
+
+                // Fix for bad SSL issues
+
+
+                Log.Logger = new LoggerConfiguration()
+                    .Enrich.FromLogContext()
+                    .Enrich.WithExceptionDetails()
+                    .WriteTo.Console()
+                    .WriteTo.EventCollector(
+                        splunkHost: Configuration["SPLUNK_COLLECTOR_URL"],
+                        sourceType: "portal",
+                        eventCollectorToken: Configuration["SPLUNK_TOKEN"],
+                        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information,
+#pragma warning disable CA2000 // Dispose objects before losing scope
+                        messageHandler: new HttpClientHandler()
+                        {
+                            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
+                            {
+                                return true;
+                            }
+                        }
+#pragma warning restore CA2000 // Dispose objects before losing scope
+                    )
+                    .CreateLogger();
+
+                Serilog.Debugging.SelfLog.Enable(Console.Error);
+
+                Log.Logger.Information("CPU Portal Container Started");
+            }
+            else
+            {
+                Log.Logger = new LoggerConfiguration()
+                    .Enrich.FromLogContext()
+                    .Enrich.WithExceptionDetails()
+                    .WriteTo.Console()
+                    .CreateLogger();
+            }
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
