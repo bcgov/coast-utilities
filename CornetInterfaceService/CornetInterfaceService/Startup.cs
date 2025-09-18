@@ -79,7 +79,7 @@ namespace CASInterfaceService
                     .WriteTo.Console()
                     .WriteTo.EventCollector(
                         splunkHost: Configuration["SPLUNK_COLLECTOR_URL"],
-                        sourceType: "portal",
+                        sourceType: "cornet-interface",
                         eventCollectorToken: Configuration["SPLUNK_TOKEN"],
                         restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information,
 #pragma warning disable CA2000 // Dispose objects before losing scope
@@ -96,7 +96,7 @@ namespace CASInterfaceService
 
                 Serilog.Debugging.SelfLog.Enable(Console.Error);
 
-                Log.Logger.Information("CPU Portal Container Started");
+                Log.Logger.Information("Cornet Interface Container Started");
             }
             else
             {
