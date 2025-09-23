@@ -46,13 +46,14 @@ namespace CASInterfaceService
             //    .Build();
             //host.Run();
 
-            var host = new WebHostBuilder()
+            var host = WebHost.CreateDefaultBuilder()
                 //.UseKestrel(options =>
                 //{
                 //    // options.ThreadCount = 4;
                 //    options.NoDelay = true;
                 //    options.UseConnectionLogging();
                 //})
+                
                 .UseKestrel()
                 .UseUrls("http://*:8080")
                 .UseContentRoot(Directory.GetCurrentDirectory())
