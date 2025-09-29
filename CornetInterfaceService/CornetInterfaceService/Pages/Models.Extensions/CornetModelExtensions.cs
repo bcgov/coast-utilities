@@ -23,9 +23,12 @@ namespace CASInterfaceService.Pages.Models.Extensions
             cornetTransaction.DataValue2 = model.event_data[1].data_value_txt;
             cornetTransaction.DataElement3 = model.event_data[2].data_element_nm;
             cornetTransaction.DataValue3 = model.event_data[2].data_value_txt;
-            cornetTransaction.DataElement4 = model.event_data[3].data_element_nm;
-            cornetTransaction.DataValue4 = model.event_data[3].data_value_txt;
+            if(model.event_data.Count > 3) { 
+                cornetTransaction.DataElement4 = model.event_data[3]?.data_element_nm;
+                cornetTransaction.DataValue4 = model.event_data[3]?.data_value_txt;
+            }
             return cornetTransaction;
         }
     }
 }
+
