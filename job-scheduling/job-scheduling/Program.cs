@@ -15,11 +15,35 @@ namespace job_scheduling
     {
         static void Main(string[] args)
         {
+            // Load configuration for Serilog setup
+            var builder = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddUserSecrets<Program>();
+            var Configuration = builder.Build();
+
             // Configure Serilog
-            Log.Logger = new LoggerConfiguration()
+            var loggerConfig = new LoggerConfiguration()
                 .MinimumLevel.Debug()
-                .WriteTo.Console()
-                .CreateLogger();
+                .WriteTo.Console();
+
+            // Configure Splunk sink if available
+            string splunkUrl = Configuration["SPLUNK_URL"];
+            string splunkToken = Configuration["SPLUNK_TOKEN"];
+
+            if (!string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
+            {
+                loggerConfig.WriteTo.EventCollector(
+                    splunkHost: splunkUrl,
+                    eventCollectorToken: splunkToken);
+
+                Log.Logger = loggerConfig.CreateLogger();
+                Log.Information("Serilog configured with Splunk sink at {SplunkUrl}", splunkUrl);
+            }
+            else
+            {
+                Log.Logger = loggerConfig.CreateLogger();
+                Log.Information("Serilog configured with Console sink only (Splunk not configured)");
+            }
 
             Log.Information("Application starting");
             //var result = ExecuteSchedulingJob();
