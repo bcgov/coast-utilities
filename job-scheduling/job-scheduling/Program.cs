@@ -51,21 +51,15 @@ namespace job_scheduling
                 Log.Information("Serilog configured with Console sink only (Splunk not configured)");
             }
 
-            Log.Information("Application starting");
-            var result = Demo();
+            Log.Information("Job execution starting");
+            var result = ExecuteJob(Configuration);
             result.Wait();
-            Log.Information("Application completed successfully");
+            Log.Information("Job completed");
             Log.CloseAndFlush();
         }
 
-        static async Task Demo()
+        static async Task ExecuteJob(IConfigurationRoot Configuration)
         {
-            var builder = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
-                .AddUserSecrets<Program>(); // must also define a project guid for secrets in the .cspro – add tag <UserSecretsId> containing a guid
-            var Configuration = builder.Build();
-
-
             string dynamicsOdataUri = Configuration["DYNAMICS_ODATA_URI"]; // Dynamics ODATA endpoint
             string dynamicsJobName = Configuration["DYNAMICS_JOB_NAME"]; // Dynamics Job Name
 
