@@ -24,6 +24,8 @@ namespace job_scheduling
             // Configure Serilog
             var loggerConfig = new LoggerConfiguration()
                 .MinimumLevel.Debug()
+                .Enrich.WithProperty("ServiceName", "job-scheduler")
+                .Enrich.WithProperty("ServiceType", "coast-utilities")
                 .WriteTo.Console();
 
             // Configure Splunk sink if available
@@ -34,10 +36,14 @@ namespace job_scheduling
             {
                 loggerConfig.WriteTo.EventCollector(
                     splunkHost: splunkUrl,
-                    eventCollectorToken: splunkToken);
+                    eventCollectorToken: splunkToken,
+                    source: "job-scheduler",
+                    sourceType: "coast:job-scheduler",
+                    host: Environment.MachineName);
 
                 Log.Logger = loggerConfig.CreateLogger();
-                Log.Information("Serilog configured with Splunk sink at {SplunkUrl}", splunkUrl);
+                Log.Information("Serilog configured with Splunk sink at {SplunkUrl} (source: job-scheduler, sourceType: coast:job-scheduler)",
+                    splunkUrl);
             }
             else
             {
@@ -46,8 +52,6 @@ namespace job_scheduling
             }
 
             Log.Information("Application starting");
-            //var result = ExecuteSchedulingJob();
-            //result.Wait();
             var result = Demo();
             result.Wait();
             Log.Information("Application completed successfully");
@@ -180,7 +184,6 @@ namespace job_scheduling
                     if (dynamicsResults.StatusCode != HttpStatusCode.OK)
                     {
                         Log.Error("Error calling Dynamics job. Status: {StatusCode}, Content: {Content}", dynamicsResults.StatusCode, responseContent);
-                        throw new Exception("Error calling Dynamics job: " + dynamicsResults.StatusCode + " " + responseContent);
                     }
                     else
                     {
