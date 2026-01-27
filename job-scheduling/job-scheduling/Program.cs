@@ -1,13 +1,13 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
-using Microsoft.Rest;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Serilog;
+using Newtonsoft.Json;
+using Microsoft.Rest;
 
 namespace job_scheduling
 {
@@ -34,12 +34,26 @@ namespace job_scheduling
 
             if (!string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
             {
+                HttpClientHandler? handler = null;
+
+                // In development, accept any SSL certificate
+                if (Configuration["ASPNETCORE_ENVIRONMENT"] == "Development")
+                {
+                    Log.Debug("Development environment detected - accepting any SSL certificate for Splunk");
+                    handler = new HttpClientHandler
+                    {
+                        ServerCertificateCustomValidationCallback =
+                            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+                    };
+                }
+
                 loggerConfig.WriteTo.EventCollector(
                     splunkHost: splunkUrl,
                     eventCollectorToken: splunkToken,
                     source: "job-scheduler",
                     sourceType: "coast:job-scheduler",
-                    host: Environment.MachineName);
+                    host: Environment.MachineName,
+                    messageHandler: handler);
 
                 Log.Logger = loggerConfig.CreateLogger();
                 Log.Information("Serilog configured with Splunk sink at {SplunkUrl} (source: job-scheduler, sourceType: coast:job-scheduler)",
