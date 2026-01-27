@@ -29,7 +29,7 @@ namespace job_scheduling
                 .WriteTo.Console();
 
             // Configure Splunk sink if available
-            string splunkUrl = Configuration["SPLUNK_URL"];
+            string splunkUrl = Configuration["SPLUNK_COLLECTOR_URL"];
             string splunkToken = Configuration["SPLUNK_TOKEN"];
 
             if (!string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
