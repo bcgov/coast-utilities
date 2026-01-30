@@ -189,13 +189,13 @@ namespace job_scheduling
                     Log.Information("Dynamics response content: {Content}", responseContent);
 
                     // we need to fail job if we don't get a 200 response from Dynamics
-                    if (dynamicsResults.StatusCode != HttpStatusCode.OK)
+                    if (dynamicsResults.StatusCode == HttpStatusCode.OK || dynamicsResults.StatusCode == HttpStatusCode.NoContent)
                     {
-                        Log.Error("Error calling Dynamics job. Status: {StatusCode}, Content: {Content}", dynamicsResults.StatusCode, responseContent);
+                        Log.Information("Dynamics job completed successfully with status {StatusCode}", dynamicsResults.StatusCode);                        
                     }
                     else
                     {
-                        Log.Information("Dynamics job completed successfully with status {StatusCode}", dynamicsResults.StatusCode);
+                        Log.Error("Error calling Dynamics job. Status: {StatusCode}, Content: {Content}", dynamicsResults.StatusCode, responseContent);
                     }
                 }
                 catch (Exception e)
