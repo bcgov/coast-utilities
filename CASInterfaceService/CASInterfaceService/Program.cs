@@ -10,6 +10,7 @@ using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace CASInterfaceService
 {
@@ -20,19 +21,34 @@ namespace CASInterfaceService
 
         public static void Main(string[] args)
         {
+            // Load configuration for Serilog setup
+            var config = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddUserSecrets<Program>()
+                .Build();
+
+            // Configure Serilog
+            var loggerConfig = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .Enrich.WithProperty("ServiceName", "cas-api")
+                .Enrich.WithProperty("ServiceType", "coast-utilities")
+                .WriteTo.Console();
+
+            ConfigureSplunk(loggerConfig, config);
+
             //CreateWebHostBuilder(args).Build().Run();
 
 
-            //var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
-            //var url = config["ASPNETCORE_URLS"] ?? "http://*:8080";
-            //var host = new WebHostBuilder()
-            //    .UseKestrel()
-            //    .UseContentRoot(Directory.GetCurrentDirectory())
-            //    .UseIISIntegration()
-            //    //.UseStartup()
-            //    .UseUrls(url)
-            //    .Build();
-            //host.Run();
+            var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
+            var url = config["ASPNETCORE_URLS"] ?? "http://*:8080";
+            var host = new WebHostBuilder()
+                .UseKestrel()
+                .UseContentRoot(Directory.GetCurrentDirectory())
+                .UseIISIntegration()
+                //.UseStartup()
+                .UseUrls(url)
+                .Build();
+            host.Run();
 
 
             //var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
@@ -65,7 +81,47 @@ namespace CASInterfaceService
             //addresses.Add("http://unix:/tmp/kestrel-test.sock");
 
             host.Run();
+            Log.CloseAndFlush();
 
+        }
+
+        private static void ConfigureSplunk(LoggerConfiguration loggerConfig, IConfiguration config)
+        {
+            string splunkUrl = config["SPLUNK_COLLECTOR_URL"];
+            string splunkToken = config["SPLUNK_TOKEN"];
+
+            if (!string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
+            {
+                HttpClientHandler handler = null;
+
+                // In development, accept any SSL certificate
+                if (config["ASPNETCORE_ENVIRONMENT"] == "Development")
+                {
+                    Log.Debug("Development environment detected - accepting any SSL certificate for Splunk");
+                    handler = new HttpClientHandler
+                    {
+                        ServerCertificateCustomValidationCallback =
+                            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+                    };
+                }
+
+                loggerConfig.WriteTo.EventCollector(
+                    splunkHost: splunkUrl,
+                    eventCollectorToken: splunkToken,
+                    source: "cas-api",
+                    sourceType: "coast:cas-api",
+                    host: Environment.MachineName,
+                    messageHandler: handler);
+
+                Log.Logger = loggerConfig.CreateLogger();
+                Log.Information("Serilog configured with Splunk sink at {SplunkUrl} (source: cas-api, sourceType: coast:cas-api)",
+                    splunkUrl);
+            }
+            else
+            {
+                Log.Logger = loggerConfig.CreateLogger();
+                Log.Information("Serilog configured with Console sink only (Splunk not configured)");
+            }
         }
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
@@ -82,7 +138,7 @@ namespace CASInterfaceService
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenURL);
             //client.PostAsJsonAsync<HttpResponseMessage>(client.BaseAddress,new HttpResponseMessage tmpResponse());
             //var result = await client.GetAsync(URL);
-            
+
 
 
             //OAuthResponse requestToken = OAuth.AcquireRequestToken("http://www.www.com", "Post");
