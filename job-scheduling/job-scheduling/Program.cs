@@ -28,16 +28,26 @@ namespace job_scheduling
                 .Enrich.WithProperty("ServiceType", "coast-utilities")
                 .WriteTo.Console();
 
-            // Configure Splunk sink if available
-            string splunkUrl = Configuration["SPLUNK_COLLECTOR_URL"];
-            string splunkToken = Configuration["SPLUNK_TOKEN"];
+            ConfigureSplunk(loggerConfig, Configuration);
+
+            Log.Information("Job execution starting");
+            var result = ExecuteJob(Configuration);
+            result.Wait();
+            Log.Information("Job completed");
+            Log.CloseAndFlush();
+        }
+
+        private static void ConfigureSplunk(LoggerConfiguration loggerConfig, IConfigurationRoot config)
+        {
+            string splunkUrl = config["SPLUNK_COLLECTOR_URL"];
+            string splunkToken = config["SPLUNK_TOKEN"];
 
             if (!string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
             {
                 HttpClientHandler? handler = null;
 
                 // In development, accept any SSL certificate
-                if (Configuration["ASPNETCORE_ENVIRONMENT"] == "Development")
+                if (config["ASPNETCORE_ENVIRONMENT"] == "Development")
                 {
                     Log.Debug("Development environment detected - accepting any SSL certificate for Splunk");
                     handler = new HttpClientHandler
@@ -64,12 +74,6 @@ namespace job_scheduling
                 Log.Logger = loggerConfig.CreateLogger();
                 Log.Information("Serilog configured with Console sink only (Splunk not configured)");
             }
-
-            Log.Information("Job execution starting");
-            var result = ExecuteJob(Configuration);
-            result.Wait();
-            Log.Information("Job completed");
-            Log.CloseAndFlush();
         }
 
         static async Task ExecuteJob(IConfigurationRoot Configuration)
@@ -191,7 +195,7 @@ namespace job_scheduling
                     // we need to fail job if we don't get a 200 response from Dynamics
                     if (dynamicsResults.StatusCode == HttpStatusCode.OK || dynamicsResults.StatusCode == HttpStatusCode.NoContent)
                     {
-                        Log.Information("Dynamics job completed successfully with status {StatusCode}", dynamicsResults.StatusCode);                        
+                        Log.Information("Dynamics job completed successfully with status {StatusCode}", dynamicsResults.StatusCode);
                     }
                     else
                     {
