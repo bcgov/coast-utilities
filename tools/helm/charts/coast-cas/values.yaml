@@ -1,0 +1,72 @@
+# Default values for coast-cas
+# These defaults are merged with component-specific values.
+# Per-environment overrides go in envs/<env>/values.yaml (gitignored).
+
+defaults:
+  role: internal-app
+  port: 8080
+  targetPort: 8080
+  protocol: tcp
+  routeTimeout: "120s"
+  image:
+    name: cas-interface-service
+    tag: dev
+    triggerNamespace: ""
+  scaling:
+    minReplicas: 2
+    maxReplicas: 6
+    minAvailableReplicas: 1
+    cpuTargetAverageUtilizationPercentage: 80
+    memoryTargetAverageUtilizationPercentage: 80
+  resources:
+    requests:
+      cpu: 100m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi
+  env: {}
+  secrets: {}
+  routes: []
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 8080
+      scheme: HTTP
+    initialDelaySeconds: 10
+    timeoutSeconds: 1
+    periodSeconds: 10
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 8080
+      scheme: HTTP
+    initialDelaySeconds: 10
+    timeoutSeconds: 1
+    periodSeconds: 10
+    successThreshold: 1
+    failureThreshold: 3
+  volumeMounts: []
+  volumes: []
+
+# Component definitions — one per microservice in this chart
+components:
+  cas-api:
+    role: external-app
+    image:
+      name: cas-interface-service
+      tag: dev
+      triggerNamespace: ""
+    env:
+      ASPNETCORE_ENVIRONMENT: Production
+    secrets: {}
+    volumeMounts:
+      - name: data-protection
+        mountPath: /root/.aspnet/DataProtection-Keys
+    volumes:
+      - name: data-protection
+        persistentVolumeClaim:
+          claimName: "{{ $.Release.Name }}-data-protection"
+    routes: []

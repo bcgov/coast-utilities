@@ -1,0 +1,76 @@
+# ======================================================================================
+#  Description:
+#  Deploy/upgrade the CAS Interface Service Helm chart to OpenShift.
+#  Use this workflow when you need to apply configuration or template changes.
+#  Image rollouts are handled automatically by ImageStreamTag triggers.
+#
+#  Triggers:
+#  - Manual only (workflow_dispatch) with environment selection.
+#
+#  Required Secrets:
+#  - OCP4_PASSWORD: OpenShift token for authentication
+#  - OPENSHIFT_SERVER: OpenShift API server URL
+#  - OCP4_NAMESPACE: Target namespace
+#  - OCP4_REGISTRY: OpenShift image registry URL
+# ======================================================================================
+
+name: deploy-cas-helm
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment (dev, test, prod)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+      image_tag:
+        description: "Image tag to deploy (e.g., dev, test, prod, main)"
+        required: true
+        default: "dev"
+
+jobs:
+  deploy-helm:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'bcgov'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Install OpenShift CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: "4"
+
+      - name: Log into OpenShift
+        run: |
+          oc login --token=${{ secrets.OCP4_PASSWORD }} --server=${{ secrets.OPENSHIFT_SERVER }}
+          oc project ${{ secrets.OCP4_NAMESPACE }}
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install coast-cas \
+            ./tools/helm/charts/coast-cas/ \
+            --namespace ${{ secrets.OCP4_NAMESPACE }} \
+            --set "defaults.image.triggerNamespace=${{ secrets.OCP4_NAMESPACE }}" \
+            --set "components.cas-api.image.tag=${{ github.event.inputs.image_tag }}" \
+            --set "components.cas-api.image.triggerNamespace=${{ secrets.OCP4_NAMESPACE }}" \
+            --wait --timeout 5m
+
+      - name: Summary
+        run: |
+          echo "## Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Chart**: coast-cas" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tag**: ${{ github.event.inputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Namespace**: ${{ secrets.OCP4_NAMESPACE }}" >> $GITHUB_STEP_SUMMARY

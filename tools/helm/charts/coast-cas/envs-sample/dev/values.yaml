@@ -1,0 +1,32 @@
+# Sample values for DEV environment
+# Copy this file to tools/helm/charts/coast-cas/envs/dev/values.yaml
+# NOTE: envs/ is gitignored — do NOT commit secrets
+#
+# Secrets (SPLUNK_COLLECTOR_URL, SPLUNK_TOKEN) should be managed externally:
+#   - OpenShift Secrets created manually or via a vault integration
+#   - Passed at deploy time with: --set components.cas-api.secrets.KEY=VALUE
+#   - Or stored in a local (non-committed) envs/<env>/values.yaml
+
+defaults:
+  image:
+    triggerNamespace: pssg-cscp-vsd-tools
+
+components:
+  cas-api:
+    role: external-app
+    image:
+      name: cas-interface-service
+      tag: dev
+      triggerNamespace: pssg-cscp-vsd-tools
+    env:
+      ASPNETCORE_ENVIRONMENT: Production
+    secrets: {}
+    routes:
+      - host: cas-interface-service-dev.apps.silver.devops.gov.bc.ca
+    volumeMounts:
+      - name: data-protection
+        mountPath: /root/.aspnet/DataProtection-Keys
+    volumes:
+      - name: data-protection
+        persistentVolumeClaim:
+          claimName: coast-cas-data-protection

@@ -1,0 +1,3 @@
+# Environment-specific values with secrets (managed locally, not in git)
+envs/
+debug.yaml
