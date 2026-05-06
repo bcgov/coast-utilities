@@ -40,6 +40,10 @@ namespace CASInterfaceService
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
 
+            services.AddHealthChecks();
+
+            services.AddSerilog();
+
             services.AddMvc(opts =>
             {
                 opts.EnableEndpointRouting = false;
@@ -49,10 +53,31 @@ namespace CASInterfaceService
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseSerilogRequestLogging(options =>
+            {
+                options.GetLevel = (httpContext, elapsed, ex) =>
+                {
+                    if (ex != null)
+                        return Serilog.Events.LogEventLevel.Error;
+
+                    var path = httpContext.Request.Path.ToString();
+
+                    if (path.StartsWith("/hc", StringComparison.OrdinalIgnoreCase))
+                        return httpContext.Response.StatusCode >= 500
+                            ? Serilog.Events.LogEventLevel.Error
+                            : Serilog.Events.LogEventLevel.Verbose;
+
+                    return httpContext.Response.StatusCode >= 400
+                        ? Serilog.Events.LogEventLevel.Warning
+                        : Serilog.Events.LogEventLevel.Information;
+                };
+            });
+
             app.UseRouting();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
+                endpoints.MapHealthChecks("/hc");
             });
 
             if (
@@ -117,7 +142,6 @@ namespace CASInterfaceService
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseCookiePolicy();
 
