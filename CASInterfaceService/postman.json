@@ -1,0 +1,171 @@
+{
+  "info": {
+    "name": "CAS Interface Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "tokenUrl", "value": "<bcgov_keycloack>/auth/realms/standard/protocol/openid-connect/token" },
+    { "key": "clientId", "value": "<resource>" },
+    { "key": "clientSecret", "value": "<credentials.secret>" },
+    { "key": "accessToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Get JWT Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["var json = pm.response.json();", "pm.collectionVariables.set('accessToken', json.access_token);", "pm.test('Token received', () => pm.expect(json.access_token).to.be.a('string'));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{tokenUrl}}",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "client_credentials" },
+                { "key": "client_id", "value": "{{clientId}}" },
+                { "key": "client_secret", "value": "{{clientSecret}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CASAPRetreive",
+      "item": [
+        {
+          "name": "Get All Transactions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/CASAPRetreive",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }]
+          }
+        },
+        {
+          "name": "Get All Transaction Records",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/CASAPRetreive/GetAllTransactionRecords",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }]
+          }
+        },
+        {
+          "name": "Get Transaction Records",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/CASAPRetreive/GetTransactionRecords",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"INV-2024-001\",\n  \"supplierNumber\": \"123456\",\n  \"supplierSiteNumber\": \"001\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CASAPTransaction",
+      "item": [
+        {
+          "name": "Register CAS AP Transaction",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/CASAPTransaction",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operatingUnit\": \"UNIT001\",\n  \"invoiceType\": \"Standard\",\n  \"supplierName\": \"Acme Corp\",\n  \"supplierNumber\": \"123456\",\n  \"supplierSiteNumber\": \"001\",\n  \"invoiceDate\": \"07-MAY-2026\",\n  \"invoiceNumber\": \"INV-2024-001\",\n  \"invoiceAmount\": 1500.00,\n  \"invoiceLineDetail\": [\n    {\n      \"invoiceLineNumber\": 1,\n      \"lineCode\": \"DR\",\n      \"invoiceLineAmount\": 1500.00,\n      \"defaultDistributionAccount\": \"001.123.45678.0000.0000\"\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Insert CAS AP Transaction",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/CASAPTransaction/InsertCASAPTransaction",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operatingUnit\": \"UNIT001\",\n  \"invoiceType\": \"Standard\",\n  \"supplierName\": \"Acme Corp\",\n  \"supplierNumber\": \"123456\",\n  \"supplierSiteNumber\": \"001\",\n  \"invoiceDate\": \"07-MAY-2026\",\n  \"invoiceNumber\": \"INV-2024-001\",\n  \"invoiceAmount\": 1500.00,\n  \"invoiceLineDetail\": [\n    {\n      \"invoiceLineNumber\": 1,\n      \"lineCode\": \"DR\",\n      \"invoiceLineAmount\": 1500.00,\n      \"defaultDistributionAccount\": \"001.123.45678.0000.0000\"\n    }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CASSupplierRetreive",
+      "item": [
+        {
+          "name": "Get Supplier Transaction Records",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/CASSupplierRetreive/GetTransactionRecords",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierNumber\": \"123456\",\n  \"supplierSiteNumber\": \"001\",\n  \"supplierName\": \"Acme Corp\",\n  \"postalCode\": \"V8W 1N3\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CornetTransaction",
+      "item": [
+        {
+          "name": "Register Cornet Transaction",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/CornetTransaction",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_message_id\": 100001,\n  \"target_system_cd\": \"DYNAMICS\",\n  \"message_event_type_cd\": \"NOTIFICATION\",\n  \"event_dtm\": \"2026-05-07T12:00:00Z\",\n  \"event_data\": [\n    {\n      \"data_element_nm\": \"case_id\",\n      \"data_value_txt\": \"CASE-001\"\n    },\n    {\n      \"data_element_nm\": \"status\",\n      \"data_value_txt\": \"ACTIVE\"\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Insert Cornet Transaction",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/CornetTransaction/InsertCornetTransaction",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_message_id\": 100001,\n  \"target_system_cd\": \"DYNAMICS\",\n  \"message_event_type_cd\": \"NOTIFICATION\",\n  \"event_dtm\": \"2026-05-07T12:00:00Z\",\n  \"event_data\": [\n    {\n      \"data_element_nm\": \"case_id\",\n      \"data_value_txt\": \"CASE-001\"\n    },\n    {\n      \"data_element_nm\": \"status\",\n      \"data_value_txt\": \"ACTIVE\"\n    }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
