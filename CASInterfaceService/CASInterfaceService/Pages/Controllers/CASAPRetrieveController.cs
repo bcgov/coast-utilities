@@ -150,14 +150,6 @@ namespace CASInterfaceService.Pages.Controllers
                 }
             }
         }
-
-        [Route("/api/protected")]
-        [Authorize]
-        [HttpGet("Protected")]
-        public string Protected()
-        {
-            return "Only if you have a valid token!";
-        }
     }
 
     // BELIEVE THESE ARE NO LONGER USED
@@ -190,14 +182,6 @@ namespace CASInterfaceService.Pages.Controllers
 
             return Json(CASAPTransactionRegistration.getInstance().getAllCASAPTransaction());
 
-        }
-
-        [Route("/api/protected")]
-        [Authorize]
-        [HttpGet("Protected")]
-        public string Protected()
-        {
-            return "Only if you have a valid token!";
         }
     }
 }
