@@ -48,10 +48,10 @@ namespace CASInterfaceService
                 .AddJwtBearer(options =>
                 {
                     options.Authority = Configuration["auth:jwt:authority"];
-                    options.Audience = Configuration["auth:jwt:audience"];                    
+                    options.Audience = Configuration["auth:jwt:audience"];
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        ValidateIssuerSigningKey = true,
+                        ValidateIssuerSigningKey = true,                        
                     };
                     options.Events = new JwtBearerEvents
                     {

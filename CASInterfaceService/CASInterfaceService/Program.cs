@@ -40,6 +40,14 @@ namespace CASInterfaceService
                 .UseKestrel()
                 .UseUrls("http://*:8080")
                 .UseContentRoot(Directory.GetCurrentDirectory())
+                .ConfigureAppConfiguration((hostingContext, configBuilder) =>
+                {
+                    configBuilder
+                        .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                        .AddJsonFile($"appsettings.{hostingContext.HostingEnvironment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                        .AddEnvironmentVariables()
+                        .AddUserSecrets<Program>();
+                })
                 .UseStartup<Startup>()
                 .Build();
 
