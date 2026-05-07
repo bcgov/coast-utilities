@@ -5,8 +5,7 @@
     <UserSecretsId>a6a87a1a-3244-4983-bfcd-dd663b9c7632</UserSecretsId>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Content Include="Pages\Controllers\StudentRetriveController.cs" />
+  <ItemGroup>    
     <Content Include="Pages\Models\CASAPTransaction.cs" />
   </ItemGroup>
 
