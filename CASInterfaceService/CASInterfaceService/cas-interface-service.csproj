@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+	<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
 	<PackageReference Include="Microsoft.AspNetCore.Authentication.Twitter" Version="8.0.11" />
     <PackageReference Include="Microsoft.IdentityModel.Clients.ActiveDirectory" Version="5.3.0" />
     <PackageReference Include="Microsoft.Rest.ClientRuntime" Version="2.3.24" />

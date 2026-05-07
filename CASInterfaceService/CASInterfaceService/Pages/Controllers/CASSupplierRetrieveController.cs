@@ -18,6 +18,7 @@ using Newtonsoft.Json.Linq;
 
 namespace CASInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CASSupplierRetreiveController : Controller
