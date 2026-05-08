@@ -14,12 +14,14 @@ using Microsoft.Rest;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using CASInterfaceService.Pages.Models.Extensions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
 namespace CASInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CornetTransactionController : Controller
@@ -71,9 +73,9 @@ namespace CASInterfaceService.Pages.Controllers
                 //}
                 //else
                 //{
-                    cornetregreply.ResponseMessage = "Failure";
-                    cornetregreply.ResponseCode = t.Result;
-                    Console.WriteLine(DateTime.Now + " Response Fail");
+                cornetregreply.ResponseMessage = "Failure";
+                cornetregreply.ResponseCode = t.Result;
+                Console.WriteLine(DateTime.Now + " Response Fail");
                 //}
             }
 
@@ -319,7 +321,7 @@ namespace CASInterfaceService.Pages.Controllers
 
                 return Ok(casregreply);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine(DateTime.Now + " Error in InsertCornetTransaction. " + e.ToString());
                 return StatusCode(e.HResult);

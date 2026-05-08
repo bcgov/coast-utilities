@@ -1,5 +1,7 @@
 using System;
 using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -8,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Exceptions;
 
@@ -41,6 +44,34 @@ namespace CASInterfaceService
 
             services.AddHealthChecks();
 
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.Authority = Configuration["auth:jwt:authority"];
+                    options.Audience = Configuration["auth:jwt:audience"];
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuerSigningKey = true,                        
+                    };
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnTokenValidated = context =>
+                        {
+                            var sub = context.Principal?.FindFirst("sub")?.Value ?? "unknown";
+                            Log.Information("JWT token validated for subject {Subject}", sub);
+                            return Task.CompletedTask;
+                        },
+                        OnAuthenticationFailed = context =>
+                        {
+                            Log.Warning("JWT authentication failed: {Error}", context.Exception.Message);
+                            return Task.CompletedTask;
+                        }
+                    };
+                    options.Validate();
+                });
+
+            services.AddAuthorization();
+
             services.AddSerilog();
 
             services.AddMvc(opts =>
@@ -73,6 +104,8 @@ namespace CASInterfaceService
             });
 
             app.UseRouting();
+            app.UseAuthentication();
+            app.UseAuthorization();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();

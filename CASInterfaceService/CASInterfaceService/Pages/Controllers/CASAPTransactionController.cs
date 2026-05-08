@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using CASInterfaceService.Pages.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -16,6 +17,7 @@ using Newtonsoft.Json.Linq;
 
 namespace CASInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CASAPTransactionController : Controller
@@ -77,7 +79,7 @@ namespace CASInterfaceService.Pages.Controllers
                 var formData = new List<KeyValuePair<string, string>>();
                 formData.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
 
-                 Console.WriteLine(DateTime.Now + " Add credentials");
+                Console.WriteLine(DateTime.Now + " Add credentials");
                 request.Content = new FormUrlEncodedContent(formData);
                 var response = await client.SendAsync(request);
 
@@ -144,7 +146,7 @@ namespace CASInterfaceService.Pages.Controllers
 
                 return Ok(casregreply);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine(DateTime.Now + " Error in InsertCASAPTransaction. " + e.ToString());
                 return StatusCode(e.HResult);

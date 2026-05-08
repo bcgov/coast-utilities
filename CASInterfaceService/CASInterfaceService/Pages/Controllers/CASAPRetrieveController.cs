@@ -18,6 +18,7 @@ using Newtonsoft.Json.Linq;
 
 namespace CASInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CASAPRetreiveController : Controller
@@ -148,55 +149,6 @@ namespace CASInterfaceService.Pages.Controllers
                     return errorObject;
                 }
             }
-        }
-
-        [Route("/api/protected")]
-        [Authorize]
-        [HttpGet("Protected")]
-        public string Protected()
-        {
-            return "Only if you have a valid token!";
-        }
-    }
-
-    // BELIEVE THESE ARE NO LONGER USED
-    [Route("api/[controller]")]
-    [ApiController]
-    public class CASAPRetrieveController : Controller
-    {
-        // GET: api/<controller>
-        [HttpGet]
-        public List<CASAPTransaction> GetAllTransactions()
-        {
-            // Call CAS to get the proper data
-            //CASAPTransactionRegistration.getInstance().getTransactionsFromCAS();
-
-            return CASAPTransactionRegistration.getInstance().getAllCASAPTransaction();
-        }
-        [HttpGet("GetAllTransactionRecords")]
-        public JsonResult GetAllTransactionRecords()
-        {
-            // Call CAS to get the proper data
-            //CASAPTransactionRegistration.getInstance().getTransactionsFromCAS();
-
-            return Json(CASAPTransactionRegistration.getInstance().getAllCASAPTransaction());
-        }
-        [HttpGet("GetTransactionUpdateRecords")]
-        public JsonResult GetTransactionUpdateRecords()
-        {
-            // Call CAS to get the proper data
-            //CASAPTransactionRegistration.getInstance().getTransactionsFromCAS();
-
-            return Json(CASAPTransactionRegistration.getInstance().getAllCASAPTransaction());
-
-        }
-
-        [Route("/api/protected")]
-        [Authorize]
-        [HttpGet("Protected")]
-        public string Protected()
-        {
-            return "Only if you have a valid token!";
         }
     }
 }
