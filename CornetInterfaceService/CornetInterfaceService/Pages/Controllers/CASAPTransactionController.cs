@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using CASInterfaceService.Pages.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -18,6 +19,7 @@ namespace CASInterfaceService.Pages.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class CASAPTransactionController : Controller
     {
         private string URL = "";

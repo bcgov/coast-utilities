@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using CASInterfaceService.Pages.Models;
 using Gov.Cscp.VictimServices.Public.JsonObjects;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
@@ -20,6 +21,7 @@ namespace CASInterfaceService.Pages.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class CornetTransactionController : Controller
     {
         private string URL = "";
