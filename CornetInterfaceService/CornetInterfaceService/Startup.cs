@@ -10,6 +10,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Exceptions;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 
 namespace CASInterfaceService
@@ -26,6 +30,83 @@ namespace CASInterfaceService
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            // Configure JWT Authentication
+            services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+
+                })
+                .AddJwtBearer(
+                    JwtBearerDefaults.AuthenticationScheme,
+                    options =>
+                    {
+                        Configuration.GetSection("jwt").Bind(options);
+                        Console.WriteLine($"JWT - Authority: {options.Authority}");
+                        Console.WriteLine($"JWT - Audience: {options.Audience}");
+
+                        options.TokenValidationParameters = new TokenValidationParameters
+                        {
+                            RequireAudience = true,
+                            ValidateAudience = true,
+                            ValidAudience = options.Audience,
+                            ValidateIssuer = true,
+                            ValidIssuer = options.Authority,
+                            ValidateLifetime = true,
+                            ValidateIssuerSigningKey = true,
+                            RequireSignedTokens = true,
+                            RequireExpirationTime = true,
+                            ClockSkew = TimeSpan.FromSeconds(60),
+                        };
+
+                        options.Events = new JwtBearerEvents
+                        {
+                            OnMessageReceived = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                var hasAuthHeader = !string.IsNullOrWhiteSpace(ctx.Request.Headers["Authorization"]);
+                                Console.WriteLine($"JWT - Message received. HasAuthorizationHeader: {hasAuthHeader}");
+                            },
+                            OnTokenValidated = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                var userId = ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Principal?.FindFirst("sub")?.Value;
+
+                                Console.WriteLine($"JWT - Token validated. UserId: {userId}");
+                            },
+                            OnAuthenticationFailed = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                Console.WriteLine("JWT - Authentication failed.");
+                            },
+                            OnChallenge = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                Console.WriteLine($"JWT - Challenge. Error: {ctx.Error}; Description: {ctx.ErrorDescription}");
+                            },
+                        };
+
+                        options.Validate();
+                    }
+                );
+
+            // Configure Authorization
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy(
+                    JwtBearerDefaults.AuthenticationScheme,
+                    policy =>
+                    {
+                        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser();
+                    }
+                );
+
+                options.DefaultPolicy = options.GetPolicy(JwtBearerDefaults.AuthenticationScheme) ?? null!;
+            });
             services.AddHttpLogging(logging =>
             {
                 logging.CombineLogs = true;
@@ -74,6 +155,9 @@ namespace CASInterfaceService
             });
 
             app.UseRouting();
+
+            app.UseAuthentication();
+            app.UseAuthorization();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
@@ -145,6 +229,7 @@ namespace CASInterfaceService
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseCookiePolicy();
+
 
             app.UseMvc();
         }
