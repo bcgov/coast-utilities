@@ -1,0 +1,36 @@
+{
+  "name": "CAS - DEV",
+  "_postman_variable_scope": "environment",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "https://cas-interface-service-f9a9e6-dev.apps.silver.devops.gov.bc.ca",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "tokenUrl",
+      "value": "<bcgov_keycloak>/auth/realms/standard/protocol/openid-connect/token",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "clientId",
+      "value": "<resource>",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "clientSecret",
+      "value": "<credentials.secret>",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ]
+}

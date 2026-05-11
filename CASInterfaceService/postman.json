@@ -5,7 +5,7 @@
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "tokenUrl", "value": "<bcgov_keycloack>/auth/realms/standard/protocol/openid-connect/token" },
+    { "key": "tokenUrl", "value": "<bcgov_keycloak>/auth/realms/standard/protocol/openid-connect/token" },
     { "key": "clientId", "value": "<resource>" },
     { "key": "clientSecret", "value": "<credentials.secret>" },
     { "key": "accessToken", "value": "" }
