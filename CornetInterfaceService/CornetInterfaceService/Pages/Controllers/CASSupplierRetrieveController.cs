@@ -20,6 +20,7 @@ namespace CASInterfaceService.Pages.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class CASSupplierRetreiveController : Controller
     {
         private string URL = "";
@@ -144,6 +145,7 @@ namespace CASInterfaceService.Pages.Controllers
     // BELIEVE THESE ARE NO LONGER USED
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class CASSupplierRetrieveController : Controller
     {
         // GET: api/<controller>
