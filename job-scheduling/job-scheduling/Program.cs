@@ -81,13 +81,13 @@ namespace job_scheduling
                 Configuration.GetSection("Dynamics").Get<DynamicsTokenProviderOptions>()
                 ?? new DynamicsTokenProviderOptions();
 
-            string dynamicsOdataUri = dynamicsOptions.DynamicsApiEndpointUrl;
+            string dynamicsOdataUri = dynamicsOptions.GetDynamicsApiEndpointUrl();
             string dynamicsJobName = Configuration["DYNAMICS_JOB_NAME"];
 
             if (string.IsNullOrEmpty(dynamicsOdataUri))
             {
-                Log.Error("Configuration setting Dynamics:DynamicsApiEndpointUrl is blank");
-                throw new Exception("Configuration setting Dynamics:DynamicsApiEndpointUrl is blank.");
+                Log.Error("Configuration setting for DynamicsApiEndpointUrl is blank");
+                throw new Exception("Configuration setting for DynamicsApiEndpointUrl is blank.");
             }
 
             if (string.IsNullOrEmpty(dynamicsJobName))

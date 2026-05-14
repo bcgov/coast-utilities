@@ -154,10 +154,10 @@ namespace AEMInterfaceService.Pages.Controllers
                 Configuration.GetSection("Dynamics").Get<DynamicsTokenProviderOptions>()
                 ?? new DynamicsTokenProviderOptions();
 
-            string dynamicsOdataUri = dynamicsOptions.DynamicsApiEndpointUrl;
+            string dynamicsOdataUri = dynamicsOptions.GetDynamicsApiEndpointUrl();
             if (string.IsNullOrEmpty(dynamicsOdataUri))
             {
-                throw new Exception("Configuration setting Dynamics:DynamicsApiEndpointUrl is blank.");
+                throw new Exception("Configuration setting for DynamicsApiEndpointUrl is blank.");
             }
 
             Console.WriteLine(DateTime.Now + " Variables have been set");
