@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using AEMInterfaceService.Pages.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -16,6 +17,7 @@ using Newtonsoft.Json.Linq;
 
 namespace AEMInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CASAPTransactionController : Controller

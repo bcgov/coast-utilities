@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 
 namespace AEMInterfaceService
 {
@@ -25,6 +28,70 @@ namespace AEMInterfaceService
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            // Configure JWT Authentication
+            services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+
+                })
+                .AddJwtBearer(
+                    JwtBearerDefaults.AuthenticationScheme,
+                    options =>
+                    {
+                        Configuration.GetSection("jwt").Bind(options);
+                        Console.WriteLine($"JWT - Authority: {options.Authority}");
+                        Console.WriteLine($"JWT - Audience: {options.Audience}");
+
+                        options.TokenValidationParameters = new TokenValidationParameters
+                        {
+                            RequireAudience = true,
+                            ValidateAudience = true,
+                            ValidAudience = options.Audience,
+                            ValidateIssuer = true,
+                            ValidIssuer = options.Authority,
+                            ValidateLifetime = true,
+                            ValidateIssuerSigningKey = true,
+                            RequireSignedTokens = true,
+                            RequireExpirationTime = true,
+                            ClockSkew = TimeSpan.FromSeconds(60),
+                        };
+
+                        options.Events = new JwtBearerEvents
+                        {
+                            OnMessageReceived = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                var hasAuthHeader = !string.IsNullOrWhiteSpace(ctx.Request.Headers["Authorization"]);
+                                Console.WriteLine($"JWT - Message received. HasAuthorizationHeader: {hasAuthHeader}");
+                            },
+                            OnTokenValidated = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                var userId = ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Principal?.FindFirst("sub")?.Value;
+
+                                Console.WriteLine($"JWT - Token validated. UserId: {userId}");
+                            },
+                            OnAuthenticationFailed = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                Console.WriteLine("JWT - Authentication failed.");
+                            },
+                            OnChallenge = async ctx =>
+                            {
+                                await Task.CompletedTask;
+
+                                Console.WriteLine($"JWT - Challenge. Error: {ctx.Error}; Description: {ctx.ErrorDescription}");
+                            },
+                        };
+
+                        options.Validate();
+                    }
+                );
+
             services.Configure<CookiePolicyOptions>(options =>
             {
                 // This lambda determines whether user consent for non-essential cookies is needed for a given request.
@@ -52,7 +119,8 @@ namespace AEMInterfaceService
                 app.UseExceptionHandler("/Error");
                 app.UseHsts();
             }
-
+            app.UseAuthentication();
+            app.UseAuthorization();
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseCookiePolicy();

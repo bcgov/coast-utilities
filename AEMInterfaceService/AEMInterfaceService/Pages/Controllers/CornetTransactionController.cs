@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using AEMInterfaceService.Pages.Models;
 using Gov.Cscp.VictimServices.Public.JsonObjects;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
@@ -20,6 +21,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace AEMInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CornetTransactionController : Controller
