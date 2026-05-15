@@ -34,8 +34,7 @@ public class EntraIdTokenProvider : ITokenProvider
 
     private async Task<string> AcquireTokenInternal()
     {
-        var tokenEndpoint =
-            $"https://login.microsoftonline.com/{options.TenantId}/oauth2/v2.0/token";
+        var tokenEndpoint = $"https://login.microsoftonline.com/{options.TenantId}/oauth2/v2.0/token";
         logger.LogDebug("Acquiring Entra ID token from {0}", tokenEndpoint);
 
         using var httpClient = httpClientFactory.CreateClient("entraid_token");

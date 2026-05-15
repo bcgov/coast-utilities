@@ -9,20 +9,14 @@ namespace Shared.Database;
 
 public static class DynamicsAuthHelper
 {
-    public static ITokenProvider CreateTokenProvider(
-        IConfiguration config,
-        IHttpClientFactory httpClientFactory
-    )
+    public static ITokenProvider CreateTokenProvider(IConfiguration config, IHttpClientFactory httpClientFactory)
     {
         // Bind configuration to DynamicsTokenProviderOptions
         var dynamicsOptions =
-            config.GetSection("Dynamics").Get<DynamicsTokenProviderOptions>()
-            ?? new DynamicsTokenProviderOptions();
+            config.GetSection("Dynamics").Get<DynamicsTokenProviderOptions>() ?? new DynamicsTokenProviderOptions();
 
         // Create dependencies
-        var memoryCache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
-            new MemoryCacheOptions()
-        );
+        var memoryCache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new MemoryCacheOptions());
         var cache = new MemoryCache(memoryCache);
         var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
