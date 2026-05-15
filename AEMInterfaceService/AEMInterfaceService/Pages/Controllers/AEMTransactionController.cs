@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using AEMInterfaceService.Pages.Models;
 using Gov.Cscp.VictimServices.Public.JsonObjects;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -22,6 +23,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AEMInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class AEMTransactionController : Controller

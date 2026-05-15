@@ -18,6 +18,7 @@ using Newtonsoft.Json.Linq;
 
 namespace AEMInterfaceService.Pages.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CASAPRetreiveController : Controller
@@ -160,6 +161,7 @@ namespace AEMInterfaceService.Pages.Controllers
     }
 
     // BELIEVE THESE ARE NO LONGER USED
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class CASAPRetrieveController : Controller
