@@ -43,9 +43,6 @@ namespace AEMInterfaceService
                         var audience = Configuration["jwt:Audience"];
                         var authority = Configuration["jwt:Authority"];
 
-                        Console.WriteLine($"JWT - Authority: {authority}");
-                        Console.WriteLine($"JWT - Audience: {audience}");
-
                         options.TokenValidationParameters = new TokenValidationParameters
                         {
                             RequireAudience = true,
