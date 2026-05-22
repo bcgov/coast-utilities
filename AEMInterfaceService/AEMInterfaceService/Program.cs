@@ -20,7 +20,7 @@ namespace AEMInterfaceService
 
         public static void Main(string[] args)
         {
-            //CreateWebHostBuilder(args).Build().Run();
+            CreateWebHostBuilder(args).Build().Run();
 
 
             //var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
@@ -46,30 +46,30 @@ namespace AEMInterfaceService
             //    .Build();
             //host.Run();
 
-            var host = new WebHostBuilder()
+            //var host = new WebHostBuilder()
                 //.UseKestrel(options =>
                 //{
                 //    // options.ThreadCount = 4;
                 //    options.NoDelay = true;
                 //    options.UseConnectionLogging();
                 //})
-                .UseKestrel()
-                .UseUrls("http://*:8080")
-                .UseContentRoot(Directory.GetCurrentDirectory())
-                .UseStartup<Startup>()
-                .Build();
+                //.UseKestrel()
+                //.UseUrls("http://*:8080")
+                //.UseContentRoot(Directory.GetCurrentDirectory())
+                //.UseStartup<Startup>()
+                //.Build();
 
             // The following section should be used to demo sockets
             //var addresses = application.GetAddresses();
             //addresses.Clear();
             //addresses.Add("http://unix:/tmp/kestrel-test.sock");
 
-            host.Run();
-
+            //host.Run();
         }
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
+                .UseUrls("http://*:8080")
                 .UseStartup<Startup>();
 
         public void CallCAS()
