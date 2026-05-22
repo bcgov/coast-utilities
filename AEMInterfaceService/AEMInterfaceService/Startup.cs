@@ -39,17 +39,20 @@ namespace AEMInterfaceService
                     JwtBearerDefaults.AuthenticationScheme,
                     options =>
                     {
-                        Configuration.GetSection("jwt").Bind(options);
-                        Console.WriteLine($"JWT - Authority: {options.Authority}");
-                        Console.WriteLine($"JWT - Audience: {options.Audience}");
+                        //Configuration.GetSection("jwt").Bind(options);
+                        var audience = Configuration["jwt:Audience"];
+                        var authority = Configuration["jwt:Authority"];
+
+                        Console.WriteLine($"JWT - Authority: {authority}");
+                        Console.WriteLine($"JWT - Audience: {audience}");
 
                         options.TokenValidationParameters = new TokenValidationParameters
                         {
                             RequireAudience = true,
                             ValidateAudience = true,
-                            ValidAudience = options.Audience,
+                            ValidAudience = audience,
                             ValidateIssuer = true,
-                            ValidIssuer = options.Authority,
+                            ValidIssuer = authority,
                             ValidateLifetime = true,
                             ValidateIssuerSigningKey = true,
                             RequireSignedTokens = true,
