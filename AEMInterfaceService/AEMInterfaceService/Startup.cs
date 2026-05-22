@@ -39,9 +39,11 @@ namespace AEMInterfaceService
                     JwtBearerDefaults.AuthenticationScheme,
                     options =>
                     {
-                        //Configuration.GetSection("jwt").Bind(options);
                         var audience = Configuration["jwt:Audience"];
                         var authority = Configuration["jwt:Authority"];
+
+                        options.Authority = authority;
+                        options.Audience = audience;
 
                         options.TokenValidationParameters = new TokenValidationParameters
                         {
