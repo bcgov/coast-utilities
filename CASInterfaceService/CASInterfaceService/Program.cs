@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Events;
 
 namespace CASInterfaceService
 {
@@ -29,7 +30,7 @@ namespace CASInterfaceService
 
             // Configure Serilog
             var loggerConfig = new LoggerConfiguration()
-                .MinimumLevel.Information()
+                .MinimumLevel.Debug()
                 .Enrich.WithProperty("ServiceName", "cas-api")
                 .Enrich.WithProperty("ServiceType", "coast-utilities")
                 .WriteTo.Console();
@@ -78,6 +79,7 @@ namespace CASInterfaceService
                 loggerConfig.WriteTo.EventCollector(
                     splunkHost: splunkUrl,
                     eventCollectorToken: splunkToken,
+                    restrictedToMinimumLevel: LogEventLevel.Information,
                     source: "cas-api",
                     sourceType: "coast:cas-api",
                     host: Environment.MachineName,
