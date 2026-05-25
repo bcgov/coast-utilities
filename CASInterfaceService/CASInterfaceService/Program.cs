@@ -29,7 +29,7 @@ namespace CASInterfaceService
 
             // Configure Serilog
             var loggerConfig = new LoggerConfiguration()
-                .MinimumLevel.Debug()
+                .MinimumLevel.Information()
                 .Enrich.WithProperty("ServiceName", "cas-api")
                 .Enrich.WithProperty("ServiceType", "coast-utilities")
                 .WriteTo.Console();
