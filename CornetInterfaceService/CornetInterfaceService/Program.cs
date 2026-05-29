@@ -66,7 +66,15 @@ namespace CASInterfaceService
         }
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
-            WebHost.CreateDefaultBuilder(args)
+            WebHost
+                .CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration(
+                    (hostingContext, configBuilder) =>
+                    {
+                        // Load the Yarp reverse proxy configuration
+                        configBuilder.AddJsonFile("yarp.reverseproxy.json", optional: true, reloadOnChange: true);
+                    }
+                )
                 .UseStartup<Startup>();
 
         public void CallCAS()
