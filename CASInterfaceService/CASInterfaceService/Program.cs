@@ -46,6 +46,8 @@ namespace CASInterfaceService
                     configBuilder
                         .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                         .AddJsonFile($"appsettings.{hostingContext.HostingEnvironment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                        // Load the Yarp reverse proxy configuration
+                        .AddJsonFile($"yarp.reverseproxy.json", optional: true, reloadOnChange: true)
                         .AddEnvironmentVariables()
                         .AddUserSecrets<Program>();
                 })
