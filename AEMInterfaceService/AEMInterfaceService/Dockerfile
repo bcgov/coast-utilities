@@ -2,7 +2,7 @@ ARG BUILD_ID
 ARG BUILD_VERSION
 
 # Retrieve and set base image layer
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS base
 ARG BUILD_ID
 ARG BUILD_VERSION
 WORKDIR /app
