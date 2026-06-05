@@ -1,20 +1,18 @@
 ﻿using System;
 using System.Net.Http;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpLogging;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Exceptions;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Security.Claims;
-using System.Threading.Tasks;
-
 
 namespace CASInterfaceService
 {
@@ -35,7 +33,6 @@ namespace CASInterfaceService
                 .AddAuthentication(options =>
                 {
                     options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-
                 })
                 .AddJwtBearer(
                     JwtBearerDefaults.AuthenticationScheme,
@@ -72,7 +69,9 @@ namespace CASInterfaceService
                             {
                                 await Task.CompletedTask;
 
-                                var userId = ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Principal?.FindFirst("sub")?.Value;
+                                var userId =
+                                    ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                    ?? ctx.Principal?.FindFirst("sub")?.Value;
 
                                 Console.WriteLine($"JWT - Token validated. UserId: {userId}");
                             },
@@ -86,7 +85,9 @@ namespace CASInterfaceService
                             {
                                 await Task.CompletedTask;
 
-                                Console.WriteLine($"JWT - Challenge. Error: {ctx.Error}; Description: {ctx.ErrorDescription}");
+                                Console.WriteLine(
+                                    $"JWT - Challenge. Error: {ctx.Error}; Description: {ctx.ErrorDescription}"
+                                );
                             },
                         };
 
@@ -101,7 +102,9 @@ namespace CASInterfaceService
                     JwtBearerDefaults.AuthenticationScheme,
                     policy =>
                     {
-                        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser();
+                        policy
+                            .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                            .RequireAuthenticatedUser();
                     }
                 );
 
@@ -125,10 +128,9 @@ namespace CASInterfaceService
 
             services.AddSerilog();
 
-            services.AddMvc(opts =>
-            {
-                opts.EnableEndpointRouting = false;
-            }).SetCompatibilityVersion(CompatibilityVersion.Version_3_0);
+            services.AddMvc();
+
+            services.AddReverseProxy().LoadFromConfig(Configuration.GetSection("ReverseProxy"));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -162,6 +164,7 @@ namespace CASInterfaceService
             {
                 endpoints.MapControllers();
                 endpoints.MapHealthChecks("/hc");
+                endpoints.MapReverseProxy();
             });
 
             if (
@@ -181,7 +184,6 @@ namespace CASInterfaceService
 
                 // Fix for bad SSL issues
 
-
                 Log.Logger = new LoggerConfiguration()
                     .Enrich.FromLogContext()
                     .Enrich.WithExceptionDetails()
@@ -197,7 +199,7 @@ namespace CASInterfaceService
                             ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
                             {
                                 return true;
-                            }
+                            },
                         }
 #pragma warning restore CA2000 // Dispose objects before losing scope
                     )
@@ -229,9 +231,6 @@ namespace CASInterfaceService
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseCookiePolicy();
-
-
-            app.UseMvc();
         }
     }
 }
