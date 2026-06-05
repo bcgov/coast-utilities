@@ -4,25 +4,26 @@
     <UserSecretsId>a6a87a1a-3244-4983-bfcd-dd663b9c7632</UserSecretsId>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Content Include="Pages\Controllers\StudentRetriveController.cs" />
-    <Content Include="Pages\Models\CASAPTransaction.cs" />
-  </ItemGroup>
+    <ItemGroup>
+        <Content Include="Pages\Controllers\StudentRetriveController.cs" />
+        <Content Include="Pages\Models\CASAPTransaction.cs" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.26" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Twitter" Version="8.0.11" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.11" />
-    <PackageReference Include="RestSharp" Version="112.1.0" />
-    <PackageReference Include="Serilog" Version="4.0.2" />
-    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
-    <PackageReference Include="Serilog.Exceptions" Version="8.4.0" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-    <PackageReference Include="Serilog.Sinks.Splunk" Version="5.0.1" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.26" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.Twitter" Version="8.0.11" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.11" />
+        <PackageReference Include="RestSharp" Version="112.1.0" />
+        <PackageReference Include="Serilog" Version="4.0.2" />
+        <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+        <PackageReference Include="Serilog.Exceptions" Version="8.4.0" />
+        <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+        <PackageReference Include="Serilog.Sinks.Splunk" Version="5.0.1" />
+        <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\Shared.Database\Shared.Database.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\Shared.Database\Shared.Database.csproj" />
+    </ItemGroup>
 </Project>

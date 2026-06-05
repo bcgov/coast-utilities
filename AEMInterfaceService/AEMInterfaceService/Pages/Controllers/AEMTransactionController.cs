@@ -1,23 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using AEMInterfaceService.Pages.Models;
+using AEMInterfaceService.Pages.Models.Extensions;
 using Gov.Cscp.VictimServices.Public.JsonObjects;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using AEMInterfaceService.Pages.Models.Extensions;
-using Microsoft.AspNetCore.Http;
 using Oracle.ManagedDataAccess.Client;
-using System.Data;
 using Shared.Database;
-using Microsoft.Extensions.DependencyInjection;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -28,32 +28,23 @@ namespace AEMInterfaceService.Pages.Controllers
     [ApiController]
     public class AEMTransactionController : Controller
     {
-        //private string URL = "";
-        //private string TokenURL = "";
-        //private string clientID = "";
-        //private string secret = "";
-
-
         private readonly IConfiguration _configuration;
-        //private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AEMTransactionController(IConfiguration configuration)//, IHttpContextAccessor httpContextAccessor)
+        public AEMTransactionController(IConfiguration configuration)
         {
             _configuration = configuration;
-            //_httpContextAccessor = httpContextAccessor;
         }
-
 
         // POST: api/<controller>
         [HttpPost]
-        public async Task<AEMTransactionRegistrationReply> RegisterAEMTransaction([FromBody] AEMTransaction aemTransaction)
+        public async Task<AEMTransactionRegistrationReply> RegisterAEMTransaction(
+            [FromBody] AEMTransaction aemTransaction
+        )
         {
             Console.WriteLine(DateTime.Now + " In RegisterAEMTransaction");
 
             // Set code to read secrets
-            var builder = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
-                .AddUserSecrets<Program>(); // must also define a project guid for secrets in the .cspro – add tag <UserSecretsId> containing a guid
+            var builder = new ConfigurationBuilder().AddEnvironmentVariables().AddUserSecrets<Program>(); // must also define a project guid for secrets in the .cspro – add tag <UserSecretsId> containing a guid
             var Configuration = builder.Build();
 
             //TODO update these to be stored secrets
@@ -65,28 +56,33 @@ namespace AEMInterfaceService.Pages.Controllers
             Console.WriteLine(DateTime.Now + " Got Login/Password information");
 
             HttpClient _client = new HttpClient();
-            _client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue(
-                        "Basic", Convert.ToBase64String(
-                            System.Text.ASCIIEncoding.ASCII.GetBytes(
-                               $"{username}:{password}")));
-
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(System.Text.ASCIIEncoding.ASCII.GetBytes($"{username}:{password}"))
+            );
 
             Console.WriteLine(DateTime.Now + " About to start Step 1");
 
             //step 1 - get render_url
-            string endpointUrl2 = uri + "/adobeords/web/adobegetrenderurl?document_format=" + aemTransaction.document_format + "&policy=victim";
+            string endpointUrl2 =
+                uri
+                + "/adobeords/web/adobegetrenderurl?document_format="
+                + aemTransaction.document_format
+                + "&policy=victim";
             Console.WriteLine(DateTime.Now + " Got Endpoint: " + endpointUrl2);
             HttpRequestMessage _httpRequest2 = new HttpRequestMessage(HttpMethod.Get, endpointUrl2);
             Console.WriteLine(DateTime.Now + " Made httpRequest: " + _httpRequest2.RequestUri);
             var _httpResponse2 = await _client.SendAsync(_httpRequest2);
             Console.WriteLine(DateTime.Now + " Got response: " + _httpResponse2.StatusCode);
-            AdobeGetRenderURLResponse _responseContent2 = await _httpResponse2.Content.ReadAsAsync<AdobeGetRenderURLResponse>();
+            AdobeGetRenderURLResponse _responseContent2 =
+                await _httpResponse2.Content.ReadAsAsync<AdobeGetRenderURLResponse>();
             Console.WriteLine(DateTime.Now + " Step 1 Complete");
 
             //step 3 - get content_guid
             // Convert xml from base 64 to xml string
-            var tempAEMXML = System.Xml.Linq.XElement.Load(new System.IO.MemoryStream(Convert.FromBase64String(aemTransaction.aem_xml_data)));
+            var tempAEMXML = System.Xml.Linq.XElement.Load(
+                new System.IO.MemoryStream(Convert.FromBase64String(aemTransaction.aem_xml_data))
+            );
             Console.WriteLine(DateTime.Now + " Working with this XML: " + tempAEMXML);
             //string endpointUrl = uri + "/adobeords/web/adobesavexml?documentContentText=" + tempAEMXML.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
             string endpointUrl = uri + "/adobeords/web/adobesavexml";
@@ -94,7 +90,12 @@ namespace AEMInterfaceService.Pages.Controllers
             HttpRequestMessage _httpRequest = new HttpRequestMessage(HttpMethod.Post, endpointUrl);
             Console.WriteLine(DateTime.Now + " Made the _httpRequest");
 
-            var jsonRequest = string.Format("$!$\"documentContentText\":\"{0}\"$&$", tempAEMXML.ToString(System.Xml.Linq.SaveOptions.DisableFormatting)).Replace("$!$", "{").Replace("$&$", "}");
+            var jsonRequest = string.Format(
+                    "$!$\"documentContentText\":\"{0}\"$&$",
+                    tempAEMXML.ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+                )
+                .Replace("$!$", "{")
+                .Replace("$&$", "}");
             _httpRequest.Content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
             Console.WriteLine(DateTime.Now + " Created the httpRequest.Content: " + jsonRequest);
 
@@ -139,14 +140,126 @@ namespace AEMInterfaceService.Pages.Controllers
 
             Console.WriteLine(DateTime.Now + " Exit RegisterAEMTransaction");
             return aemregreply;
+        }
 
-         }
-        //private static async Task<string> CallAEMWithDynamicsData(IConfiguration configuration, AEMTransaction model)
-        //{
-        //    Console.WriteLine(DateTime.Now + " In CallAEMWithDynamicsData");
-        //    return "success";
+        /// <summary>
+        /// Tegisters the transaction with AEM and immediately returns the rendered PDF binary
+        /// </summary>
+        /// <param name="aemTransaction"></param>
+        /// <returns></returns>
+        [HttpPost("RegisterAndRetrievePdf")]
+        public async Task<IActionResult> RegisterAndRetrievePdf([FromBody] AEMTransaction aemTransaction)
+        {
+            Console.WriteLine(
+                DateTime.Now
+                    + " In RegisterAndRetrievePdf - aem_app="
+                    + aemTransaction.AEMApp
+                    + " aem_form="
+                    + aemTransaction.AEMForm
+                    + " document_format="
+                    + aemTransaction.document_format
+            );
 
-        //}
+            var builder = new ConfigurationBuilder().AddEnvironmentVariables().AddUserSecrets<Program>();
+            var configuration = builder.Build();
+
+            string uri = configuration["ORACLE_CONNECTION_URL"];
+            string username = configuration["ORACLE_URL_USERID"];
+            string password = configuration["ORACLE_URL_PASSWORD"];
+
+            using HttpClient client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(System.Text.ASCIIEncoding.ASCII.GetBytes($"{username}:{password}"))
+            );
+
+            // Step 1 – get render URL template from AEM
+            string renderUrlEndpoint =
+                uri
+                + "/adobeords/web/adobegetrenderurl?document_format="
+                + aemTransaction.document_format
+                + "&policy=victim";
+
+            Console.WriteLine(DateTime.Now + " RegisterAndRetrievePdf: Step 1 - " + renderUrlEndpoint);
+
+            var renderUrlResponse = await client.GetAsync(renderUrlEndpoint);
+
+            Console.WriteLine(
+                DateTime.Now + " RegisterAndRetrievePdf: Step 1 - response " + renderUrlResponse.StatusCode
+            );
+
+            if (!renderUrlResponse.IsSuccessStatusCode)
+                return StatusCode((int)renderUrlResponse.StatusCode, "Failed to retrieve render URL from AEM.");
+
+            AdobeGetRenderURLResponse renderUrlContent =
+                await renderUrlResponse.Content.ReadAsAsync<AdobeGetRenderURLResponse>();
+
+            Console.WriteLine(
+                DateTime.Now + " RegisterAndRetrievePdf: Step 1 Complete - render_url=" + renderUrlContent.render_url
+            );
+
+            // Step 2 – save XML to AEM to get the pKey (ticket)
+            var tempAEMXML = System.Xml.Linq.XElement.Load(
+                new System.IO.MemoryStream(Convert.FromBase64String(aemTransaction.aem_xml_data))
+            );
+
+            string saveXmlEndpoint = uri + "/adobeords/web/adobesavexml";
+
+            Console.WriteLine(DateTime.Now + " RegisterAndRetrievePdf: Step 2 - " + saveXmlEndpoint);
+
+            var jsonRequest = string.Format(
+                    "$!$\"documentContentText\":\"{0}\"$&$",
+                    tempAEMXML.ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+                )
+                .Replace("$!$", "{")
+                .Replace("$&$", "}");
+            var saveXmlRequest = new HttpRequestMessage(HttpMethod.Post, saveXmlEndpoint)
+            {
+                Content = new StringContent(jsonRequest, Encoding.UTF8, "application/json"),
+            };
+            var saveXmlResponse = await client.SendAsync(saveXmlRequest);
+
+            Console.WriteLine(
+                DateTime.Now + " RegisterAndRetrievePdf: Step 2 - response " + saveXmlResponse.StatusCode
+            );
+
+            if (!saveXmlResponse.IsSuccessStatusCode)
+                return StatusCode((int)saveXmlResponse.StatusCode, "Failed to save XML to AEM.");
+
+            AdobeSaveXMLResponse saveXmlContent = await saveXmlResponse.Content.ReadAsAsync<AdobeSaveXMLResponse>();
+
+            Console.WriteLine(DateTime.Now + " RegisterAndRetrievePdf: Step 2 Complete");
+
+            // Step 3 – resolve placeholders to build the PDF URL
+            string pdfUrl = renderUrlContent.render_url;
+            pdfUrl = pdfUrl.Replace("<<APP>>", aemTransaction.AEMApp);
+            pdfUrl = pdfUrl.Replace("<<FORM>>", aemTransaction.AEMForm);
+            pdfUrl = pdfUrl.Replace("<<TICKET>>", saveXmlContent.pKey);
+            pdfUrl = pdfUrl.Replace(configuration["RESPONSE_URL"], configuration["GATEWAY_URL"]);
+            pdfUrl = pdfUrl.Replace("https://prod.", "https://");
+
+            Console.WriteLine(DateTime.Now + " RegisterAndRetrievePdf: Step 3 Complete - resolved PDF URL: " + pdfUrl);
+
+            AEMTransactionRegistration.getInstance().Add(aemTransaction);
+
+            // Step 4 – fetch the PDF and return it directly to the caller
+            Console.WriteLine(DateTime.Now + " RegisterAndRetrievePdf: Step 4 - fetching PDF");
+
+            var pdfResponse = await client.GetAsync(pdfUrl, HttpCompletionOption.ResponseHeadersRead);
+
+            Console.WriteLine(DateTime.Now + " RegisterAndRetrievePdf: Step 4 - response " + pdfResponse.StatusCode);
+
+            if (!pdfResponse.IsSuccessStatusCode)
+                return StatusCode((int)pdfResponse.StatusCode, "AEM returned an error when fetching the PDF.");
+
+            var pdfStream = await pdfResponse.Content.ReadAsStreamAsync();
+
+            string contentType = pdfResponse.Content.Headers.ContentType?.ToString() ?? "application/pdf";
+
+            Console.WriteLine(DateTime.Now + " Exit RegisterAndRetrievePdf");
+
+            return File(pdfStream, contentType);
+        }
 
         private static async Task<string> CallDynamicsWithAEMData(IConfiguration configuration, AEMTransaction model)
         {
@@ -189,7 +302,6 @@ namespace AEMInterfaceService.Pages.Controllers
 
                 Console.WriteLine(DateTime.Now + " Return results from Dynamics");
                 return dynamicsResponse.odatacontext;
-
             }
             finally
             {
@@ -198,12 +310,14 @@ namespace AEMInterfaceService.Pages.Controllers
             }
         }
 
-        static async Task<Tuple<int, HttpResponseMessage, string>> GetDynamicsHttpClientNew(IConfiguration configuration, String model, String endPointName)
+        static async Task<Tuple<int, HttpResponseMessage, string>> GetDynamicsHttpClientNew(
+            IConfiguration configuration,
+            String model,
+            String endPointName
+        )
         {
             Console.WriteLine(DateTime.Now + " In GetDynamicsHttpClientNew");
-            var builder = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
-                .AddUserSecrets<Program>();
+            var builder = new ConfigurationBuilder().AddEnvironmentVariables().AddUserSecrets<Program>();
             var Configuration = builder.Build();
             Console.WriteLine(DateTime.Now + " Build Configuration");
 
@@ -287,7 +401,6 @@ namespace AEMInterfaceService.Pages.Controllers
                 Console.WriteLine(DateTime.Now + " Error in InsertCornetTransaction. " + e.ToString());
                 return StatusCode(e.HResult);
             }
-
         }
 
         internal class DynamicsResponse
