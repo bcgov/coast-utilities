@@ -1,0 +1,12 @@
+**/.vs/
+**/[Bb]in/
+**/[Oo]bj/
+**/*.user
+**/*.suo
+**/*.userosscache
+**/*.sln.docstates
+**/[Ll]og/
+**/.git/
+**/[Tt]est[Rr]esult*/
+**/*.VisualState.xml
+**/TestResult.xml
