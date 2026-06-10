@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -13,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Exceptions;
+using Yarp.ReverseProxy.Transforms;
 
 namespace CASInterfaceService
 {
@@ -130,7 +133,30 @@ namespace CASInterfaceService
 
             services.AddMvc();
 
-            services.AddReverseProxy().LoadFromConfig(Configuration.GetSection("ReverseProxy"));
+            services
+                .AddReverseProxy()
+                .LoadFromConfig(Configuration.GetSection("ReverseProxy"))
+                .AddTransforms(builderContext =>
+                {
+                    // After the incoming JWT is validated, replace the Authorization header
+                    // on the proxied request with Basic credentials for the downstream API.
+                    builderContext.AddRequestTransform(transformContext =>
+                    {
+                        var username = Configuration["CorVSUDynAPI:Username"];
+                        var password = Configuration["CorVSUDynAPI:Password"];
+
+                        if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(password))
+                        {
+                            var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}"));
+                            transformContext.ProxyRequest.Headers.Authorization = new AuthenticationHeaderValue(
+                                "Basic",
+                                encoded
+                            );
+                        }
+
+                        return ValueTask.CompletedTask;
+                    });
+                });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
