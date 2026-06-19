@@ -11,6 +11,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using CASInterfaceService.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Serilog;
 using Serilog.Exceptions;
 
@@ -51,7 +53,7 @@ namespace CASInterfaceService
                     options.Audience = Configuration["auth:jwt:audience"];
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        ValidateIssuerSigningKey = true,                        
+                        ValidateIssuerSigningKey = true,
                     };
                     options.Events = new JwtBearerEvents
                     {
@@ -70,7 +72,17 @@ namespace CASInterfaceService
                     options.Validate();
                 });
 
-            services.AddAuthorization();
+            services.AddSingleton<IAuthorizationHandler, ConditionalAuthorizationHandler>();
+
+            services.AddAuthorization(options =>
+            {
+                var conditionalPolicy = new AuthorizationPolicyBuilder()
+                    .AddRequirements(new ConditionalAuthorizationRequirement())
+                    .Build();
+
+                options.DefaultPolicy = conditionalPolicy;
+                options.FallbackPolicy = conditionalPolicy;
+            });
 
             services.AddSerilog();
 
