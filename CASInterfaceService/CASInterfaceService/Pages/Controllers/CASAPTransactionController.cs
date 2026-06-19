@@ -98,7 +98,7 @@ namespace CASInterfaceService.Pages.Controllers
                 using (var packageClient = new HttpClient())
                 {
                     packageClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", responseToken);
-                    var jsonString = JsonConvert.SerializeObject(casAPTransaction);
+                    var jsonString = JsonConvert.SerializeObject(casAPTransaction);                    
                     //HttpContent postContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
                     HttpContent postContent = new StringContent(jsonString);
                     Console.WriteLine(DateTime.Now + " JSON: " + jsonString);
@@ -109,9 +109,13 @@ namespace CASInterfaceService.Pages.Controllers
                     outputMessage = Convert.ToString(packageResult.Content.ReadAsStringAsync().Result);
                     Console.WriteLine(DateTime.Now + " Output Message: " + outputMessage);
 
-                    if (packageResult.StatusCode == HttpStatusCode.Unauthorized)
+                    if (!packageResult.IsSuccessStatusCode)
                     {
-                        Console.WriteLine(DateTime.Now + " Ruh Roh, there was an error: " + packageResult.StatusCode);
+                        Console.WriteLine(DateTime.Now + " CAS rejected invoice: " + casAPTransaction.invoiceNumber + ". HTTP " + (int)packageResult.StatusCode + ". Response: " + outputMessage);
+                        dynamic errorObject = new JObject();
+                        errorObject.invoice_number = casAPTransaction.invoiceNumber;
+                        errorObject.CAS_Returned_Messages = "CAS Error " + (int)packageResult.StatusCode + ": " + outputMessage;
+                        return errorObject;
                     }
                 }
             }
