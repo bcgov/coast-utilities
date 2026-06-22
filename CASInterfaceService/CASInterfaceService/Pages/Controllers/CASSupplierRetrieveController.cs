@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -37,7 +38,7 @@ namespace CASInterfaceService.Pages.Controllers
             var headers = re.Headers;
 
             // Get secret information
-            Console.WriteLine("Get Secret information.");
+            Log.Debug("Loading configuration and secrets for CASSupplierRetrieveController");
             var builder = new ConfigurationBuilder()
                 .AddEnvironmentVariables()
                 .AddUserSecrets<Program>(); // must also define a project guid for secrets in the .cspro – add tag <UserSecretsId> containing a guid
@@ -49,18 +50,16 @@ namespace CASInterfaceService.Pages.Controllers
             secret = headers["secret"].ToString();
             clientID = headers["clientID"].ToString();
 
-            Console.WriteLine("In RegisterCASAPTransaction");
+            Log.Information("GetTransactionRecords (supplier) called for supplier {SupplierNumber}", casSupplierQuery.supplierNumber);
             CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
             CASSupplierQueryRegistration.getInstance().Add(casSupplierQuery);
 
             try
             {
                 // Start by getting token
-                Console.WriteLine("Starting sendTransactionsToCAS.");
+                Log.Debug("Requesting OAuth token from {TokenUrl}", TokenURL);
 
                 HttpClientHandler handler = new HttpClientHandler();
-                Console.WriteLine("GET: + " + TokenURL);
-
                 HttpClient client = new HttpClient(handler);
 
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.ASCIIEncoding.ASCII.GetBytes(string.Format("{0}:{1}", clientID, secret))));
@@ -70,12 +69,12 @@ namespace CASInterfaceService.Pages.Controllers
                 var formData = new List<KeyValuePair<string, string>>();
                 formData.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
 
-                Console.WriteLine("Add credentials");
+                Log.Debug("Adding client credentials to token request");
                 request.Content = new FormUrlEncodedContent(formData);
                 var response = await client.SendAsync(request);
 
                 response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                Console.WriteLine("Response Received: " + response.StatusCode);
+                Log.Debug("Token endpoint responded with HTTP {StatusCode}", response.StatusCode);
                 response.EnsureSuccessStatusCode();
 
                 // Put token alone in responseToken
@@ -83,7 +82,7 @@ namespace CASInterfaceService.Pages.Controllers
                 var jo = JObject.Parse(responseBody);
                 string responseToken = jo["access_token"].ToString();
 
-                Console.WriteLine("Received token successfully, now to send request to CAS.");
+                Log.Information("OAuth token acquired, querying CAS for supplier {SupplierNumber}", casSupplierQuery.supplierNumber);
 
                 // Token received, now send package using token
                 using (var packageClient = new HttpClient())
@@ -94,17 +93,19 @@ namespace CASInterfaceService.Pages.Controllers
 
                     HttpResponseMessage packageResult = await packageClient.GetAsync(URL);// + casSupplierQuery.invoiceNumber + "/" + casSupplierQuery.supplierNumber + "/" + casSupplierQuery.supplierSiteNumber);
 
+                    Log.Debug("CAS supplier endpoint responded with HTTP {StatusCode} for supplier {SupplierNumber}", packageResult.StatusCode, casSupplierQuery.supplierNumber);
+
                     // Put token alone in responseToken
                     string xresponseBody = await packageResult.Content.ReadAsStringAsync();
                     var xjo = JObject.Parse(xresponseBody);
 
+                    Log.Information("Successfully retrieved supplier {SupplierNumber} from CAS", casSupplierQuery.supplierNumber);
                     return xjo;
                 }
             }
             catch (Exception e)
             {
-                var errorContent = new StringContent(casSupplierQuery.ToString(), Encoding.UTF8, "application/json");
-                Console.WriteLine("Error in sendTransactionsToCASShort. ");// + client.BaseAddress.ToString() + errorContent + client + e.ToString());
+                Log.Error(e, "Unhandled exception in GetTransactionRecords (supplier) for supplier {SupplierNumber}", casSupplierQuery.supplierNumber);
                 dynamic errorObject = new JObject();
                 errorObject.message_UUID = "00000000-0000-0000-0000-000000000000";
                 errorObject.supplier_number = casSupplierQuery.supplierNumber;
