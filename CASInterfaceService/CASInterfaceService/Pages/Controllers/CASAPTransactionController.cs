@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -27,7 +28,6 @@ namespace CASInterfaceService.Pages.Controllers
         private string clientID = "";
         private string secret = "";
 
-        // POST: api/<controller>
         [HttpPost]
         public async Task<JObject> RegisterCASAPTransaction(CASAPTransaction casAPTransaction)
         {
@@ -37,7 +37,7 @@ namespace CASInterfaceService.Pages.Controllers
             var headers = re.Headers;
 
             // Get secret information
-            Console.WriteLine(DateTime.Now + " Get Secret information.");
+            Log.Debug("Loading configuration and secrets for CASAPTransactionController");
             var builder = new ConfigurationBuilder()
                 .AddEnvironmentVariables()
                 .AddUserSecrets<Program>(); // must also define a project guid for secrets in the .cspro – add tag <UserSecretsId> containing a guid
@@ -49,15 +49,11 @@ namespace CASInterfaceService.Pages.Controllers
             secret = headers["secret"].ToString();
             clientID = headers["clientID"].ToString();
 
-            Console.WriteLine(DateTime.Now + " In RegisterCASAPTransaction");
+            Log.Information("RegisterCASAPTransaction called for invoice {InvoiceNumber}", casAPTransaction.invoiceNumber);
             CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
             CASAPTransactionRegistration.getInstance().Add(casAPTransaction);
-            //casregreply.RegistrationStatus = "Success";
 
-            //// Now we must call CAS with this data
-            ////Task<string> outputResult = CASAPTransactionRegistration.getInstance().sendTransactionsToCAS(casAPTransaction);
-            //Task<string> outputResult = newSendTransactionToCAS(casAPTransaction);
-            //casregreply.RegistrationStatus = Convert.ToString(outputResult);
+
 
             // Now we must call CAS with this data
             string outputMessage;
@@ -65,11 +61,9 @@ namespace CASInterfaceService.Pages.Controllers
             try
             {
                 // Start by getting token
-                Console.WriteLine(DateTime.Now + " Starting sendTransactionsToCAS (CASAPTransactionController).");
+                Log.Debug("Requesting OAuth token from {TokenUrl}", TokenURL);
 
                 HttpClientHandler handler = new HttpClientHandler();
-                Console.WriteLine(DateTime.Now + " GET: + " + TokenURL);
-
                 HttpClient client = new HttpClient(handler);
 
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.ASCIIEncoding.ASCII.GetBytes(string.Format("{0}:{1}", clientID, secret))));
@@ -79,12 +73,12 @@ namespace CASInterfaceService.Pages.Controllers
                 var formData = new List<KeyValuePair<string, string>>();
                 formData.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
 
-                Console.WriteLine(DateTime.Now + " Add credentials");
+                Log.Debug("Adding client credentials to token request");
                 request.Content = new FormUrlEncodedContent(formData);
                 var response = await client.SendAsync(request);
 
                 response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                Console.WriteLine(DateTime.Now + " Response Received: " + response.StatusCode);
+                Log.Debug("Token endpoint responded with HTTP {StatusCode}", response.StatusCode);
                 response.EnsureSuccessStatusCode();
 
                 // Put token alone in responseToken
@@ -92,26 +86,24 @@ namespace CASInterfaceService.Pages.Controllers
                 var jo = JObject.Parse(responseBody);
                 string responseToken = jo["access_token"].ToString();
 
-                Console.WriteLine(DateTime.Now + " Received token successfully, now to send package to CAS.");
+                Log.Information("OAuth token acquired, submitting invoice {InvoiceNumber} to CAS", casAPTransaction.invoiceNumber);
 
                 // Token received, now send package using token
                 using (var packageClient = new HttpClient())
                 {
                     packageClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", responseToken);
-                    var jsonString = JsonConvert.SerializeObject(casAPTransaction);                    
-                    //HttpContent postContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
+                    var jsonString = JsonConvert.SerializeObject(casAPTransaction);
                     HttpContent postContent = new StringContent(jsonString);
-                    Console.WriteLine(DateTime.Now + " JSON: " + jsonString);
+                    Log.Debug("Posting invoice payload to CAS: {InvoiceJson}", jsonString);
                     HttpResponseMessage packageResult = await packageClient.PostAsync(URL, postContent);
 
-                    Console.WriteLine(DateTime.Now + " This was the result: " + packageResult.StatusCode);
-                    //outputMessage = Convert.ToString(packageResult.StatusCode);
+                    Log.Debug("CAS AP endpoint responded with HTTP {StatusCode}", packageResult.StatusCode);
                     outputMessage = Convert.ToString(packageResult.Content.ReadAsStringAsync().Result);
-                    Console.WriteLine(DateTime.Now + " Output Message: " + outputMessage);
+                    Log.Debug("CAS response body: {ResponseBody}", outputMessage);
 
                     if (!packageResult.IsSuccessStatusCode)
                     {
-                        Console.WriteLine(DateTime.Now + " CAS rejected invoice: " + casAPTransaction.invoiceNumber + ". HTTP " + (int)packageResult.StatusCode + ". Response: " + outputMessage);
+                        Log.Warning("CAS rejected invoice {InvoiceNumber}: HTTP {StatusCode} - {ResponseBody}", casAPTransaction.invoiceNumber, (int)packageResult.StatusCode, outputMessage);
                         dynamic errorObject = new JObject();
                         errorObject.invoice_number = casAPTransaction.invoiceNumber;
                         errorObject.CAS_Returned_Messages = "CAS Error " + (int)packageResult.StatusCode + ": " + outputMessage;
@@ -121,8 +113,7 @@ namespace CASInterfaceService.Pages.Controllers
             }
             catch (Exception e)
             {
-                var errorContent = new StringContent(casAPTransaction.ToString(), Encoding.UTF8, "application/json");
-                Console.WriteLine(DateTime.Now + " Error in RegisterCASAPTransaction. Invoice: " + casAPTransaction.invoiceNumber);
+                Log.Error(e, "Unhandled exception in RegisterCASAPTransaction for invoice {InvoiceNumber}", casAPTransaction.invoiceNumber);
                 dynamic errorObject = new JObject();
                 errorObject.invoice_number = null;
                 errorObject.CAS_Returned_Messages = "Generic Error: " + e.Message;
@@ -130,7 +121,7 @@ namespace CASInterfaceService.Pages.Controllers
             }
 
             var xjo = JObject.Parse(outputMessage);
-            Console.WriteLine(DateTime.Now + " Successfully sent invoice: " + casAPTransaction.invoiceNumber);
+            Log.Information("Successfully submitted invoice {InvoiceNumber} to CAS", casAPTransaction.invoiceNumber);
             return xjo;
         }
 
@@ -139,20 +130,17 @@ namespace CASInterfaceService.Pages.Controllers
         {
             try
             {
-                Console.WriteLine(DateTime.Now + " In InsertCASAPTransaction");
+                Log.Information("InsertCASAPTransaction called for invoice {InvoiceNumber}", casAPTransaction.invoiceNumber);
                 CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
                 CASAPTransactionRegistration.getInstance().Add(casAPTransaction);
                 casregreply.RegistrationStatus = "Success";
 
-                // Now we must call CAS with this data
-                //Task<string> outputResult = CASAPTransactionRegistration.getInstance().sendTransactionsToCAS(casAPTransaction);
-                //casregreply.RegistrationStatus = Convert.ToString(outputResult);
-
+                Log.Information("InsertCASAPTransaction succeeded for invoice {InvoiceNumber}", casAPTransaction.invoiceNumber);
                 return Ok(casregreply);
             }
             catch (Exception e)
             {
-                Console.WriteLine(DateTime.Now + " Error in InsertCASAPTransaction. " + e.ToString());
+                Log.Error(e, "Unhandled exception in InsertCASAPTransaction for invoice {InvoiceNumber}", casAPTransaction.invoiceNumber);
                 return StatusCode(e.HResult);
             }
 
