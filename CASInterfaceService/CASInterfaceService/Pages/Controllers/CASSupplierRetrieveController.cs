@@ -33,10 +33,6 @@ namespace CASInterfaceService.Pages.Controllers
         [HttpPost("GetTransactionRecords")]
         public async Task<JObject> GetTransactionRecords(CASSupplierQuery casSupplierQuery)
         {
-            // Get the header
-            var re = Request;
-            var headers = re.Headers;
-
             // Get secret information
             Log.Debug("Loading configuration and secrets for CASSupplierRetrieveController");
             var builder = new ConfigurationBuilder()
@@ -45,10 +41,8 @@ namespace CASInterfaceService.Pages.Controllers
             var Configuration = builder.Build();
             URL = Configuration["CAS_API_URI"] + "cfs/apinvoice/"; // CAS AP URL
             TokenURL = Configuration["CAS_API_URI"] + "oauth/token"; // CAS AP Token URL
-
-            // Get clientID and secret from header
-            secret = headers["secret"].ToString();
-            clientID = headers["clientID"].ToString();
+            clientID = Configuration["CAS_CLIENT_ID"];
+            secret = Configuration["CAS_CLIENT_SECRET"];
 
             Log.Information("GetTransactionRecords (supplier) called for supplier {SupplierNumber}", casSupplierQuery.supplierNumber);
             CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
