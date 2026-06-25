@@ -43,14 +43,6 @@ namespace CASInterfaceService.Pages.Controllers
         [HttpPost("GetTransactionRecords")]
         public async Task<JObject> GetTransactionRecords(CASAPQuery casAPQuery)
         {
-            // Get the header
-            var re = Request;
-            var headers = re.Headers;
-
-            // Get clientID and secret from header
-            secret = headers["secret"].ToString();
-            clientID = headers["clientID"].ToString();
-
             Log.Information("GetTransactionRecords called for invoice {InvoiceNumber}", casAPQuery.invoiceNumber);
             CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
             CASAPQueryRegistration.getInstance().Add(casAPQuery);
@@ -65,6 +57,8 @@ namespace CASInterfaceService.Pages.Controllers
                 var Configuration = builder.Build();
                 URL = Configuration["CAS_API_URI"] + "cfs/apinvoice/"; // CAS AP URL
                 TokenURL = Configuration["CAS_API_URI"] + "oauth/token"; // CAS AP Token URL
+                clientID = Configuration["CAS_CLIENT_ID"];
+                secret = Configuration["CAS_CLIENT_SECRET"];
 
                 // Start by getting token
                 Log.Debug("Requesting OAuth token from {TokenUrl}", TokenURL);
