@@ -98,10 +98,6 @@ namespace CASInterfaceService.Pages.Controllers
                     if (!packageResult.IsSuccessStatusCode)
                     {
                         Log.Warning("CAS rejected invoice {InvoiceNumber}: HTTP {StatusCode} - {ResponseBody}", casAPTransaction.invoiceNumber, (int)packageResult.StatusCode, outputMessage);
-                        dynamic errorObject = new JObject();
-                        errorObject.invoice_number = casAPTransaction.invoiceNumber;
-                        errorObject.CAS_Returned_Messages = "CAS Error " + (int)packageResult.StatusCode + ": " + outputMessage;
-                        return errorObject;
                     }
                 }
             }
