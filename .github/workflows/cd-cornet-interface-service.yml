@@ -29,22 +29,22 @@ jobs:
 
     # [5] fetch -> registry login -> names+labels -> build+push (single image) -> scan -> report
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ${{ secrets.OCP4_REGISTRY }}
           username: unused
           password: ${{ secrets.OCP4_PASSWORD }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}/cornet-interface-service
           tags: |
             type=raw,value=latest          # newest build — a promotion's default source
             type=raw,value=development     # dev environment tag
             type=sha                       # sha-<commit> — permanent per-commit bookmark
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: ./CornetInterfaceService/Dockerfile
@@ -58,12 +58,12 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max                    # SLSA provenance — workflow, exact commit, base image name+digest
           sbom: true                              # SPDX SBOM — every package inside, queryable forever
-      - uses: aquasecurity/trivy-action@v0.35.0    # third-party — pin to commit SHA when hardening
+      - uses: aquasecurity/trivy-action@v0.36.0    # third-party — pin to commit SHA when hardening
         with:
           image-ref: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}/cornet-interface-service:latest
           format: sarif
           output: trivy-cornet-interface-service.sarif
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-cornet-interface-service.sarif
           category: trivy-cornet-interface-service
