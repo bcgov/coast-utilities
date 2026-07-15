@@ -1,0 +1,69 @@
+name: CD AEM Interface Service
+
+# [1] WHEN IT RUNS — a merge to develop touching this service (or the shared lib), or manual.
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "AEMInterfaceService/**"
+      - "Shared.Database/**"
+      - ".dockerignore"
+  workflow_dispatch:
+
+# [2] GUARD RAIL · LEAST PRIVILEGE — read code + write scan reports; registry access = repo secrets only
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+# [3] GUARD RAIL · ONE BUILD AT A TIME — a newer merge cancels the stale build
+concurrency:
+  group: cd-aem-interface-service-${{ github.ref }}
+  cancel-in-progress: true
+
+# [4] THE JOB — hard 30-minute cap
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # [5] fetch -> registry login -> names+labels -> build+push (single image) -> scan -> report
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.OCP4_REGISTRY }}
+          username: unused
+          password: ${{ secrets.OCP4_PASSWORD }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}/aem-interface-service
+          tags: |
+            type=raw,value=latest          # newest build — a promotion's default source
+            type=raw,value=development     # dev environment tag
+            type=sha                       # sha-<commit> — permanent per-commit bookmark
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./AEMInterfaceService/AEMInterfaceService/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_ID=${{ github.server_url }}!${{ github.repository }}!${{ github.ref_name }}!${{ github.sha }}!${{ github.run_number }}
+            BUILD_VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max                    # SLSA provenance — workflow, exact commit, base image name+digest
+          sbom: true                              # SPDX SBOM — every package inside, queryable forever
+      - uses: aquasecurity/trivy-action@v0.35.0    # third-party — pin to commit SHA when hardening
+        with:
+          image-ref: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}/aem-interface-service:latest
+          format: sarif
+          output: trivy-aem-interface-service.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-aem-interface-service.sarif
+          category: trivy-aem-interface-service

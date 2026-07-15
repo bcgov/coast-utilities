@@ -1,0 +1,75 @@
+name: Promote Job Scheduling to PROD
+
+# [1] MANUAL ONLY — a human picks the source (a TAG). Single image. job-scheduling is a CronJob.
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: "Source tag: test (ship what test proved) · sha-<commit> · prod-backup (= ROLLBACK)"
+        default: "test"
+      images:
+        description: "Which image(s) move — dropdown: no typing, no typos"
+        type: choice
+        options:
+          - all
+          - job-scheduling
+        default: all
+
+# [2] GUARD RAIL · MINIMAL PERMISSIONS — GitHub token reads only; the cluster is reached via secrets
+permissions:
+  contents: read
+
+# [3] GUARD RAIL · ONE PROMOTION AT A TIME — runs QUEUE; a mid-move promotion is never cancelled
+concurrency:
+  group: promote-job-scheduling-prod
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: prod          # [4] prod's Environment requires a reviewer once one is bound — the run PAUSES for approval
+
+    # [5] install oc -> login -> PASS 1 resolve ALL digests -> PASS 2 backup + re-point -> VERIFY (digest compare)
+    steps:
+      - uses: redhat-actions/openshift-tools-installer@v1   # third-party — pin to commit SHA when hardening
+        with:
+          oc: "4"
+      - run: oc login --token=${{ secrets.OCP4_PASSWORD }} --server=${{ secrets.OPENSHIFT_SERVER }}
+
+      - name: "PASS 1 — resolve every digest first · PASS 2 — move tags. Half-promotion is impossible."
+        run: |
+          LIST="${{ inputs.images }}"
+          [ "$LIST" = "all" ] && LIST="job-scheduling"
+          NS=${{ secrets.OCP4_NAMESPACE }}
+          # PASS 1 · resolve ALL source digests BEFORE touching anything — a missing/typo'd
+          # source tag fails the WHOLE run here, with zero tags moved.
+          # (Also what makes ROLLBACK safe: prod-backup is read before it gets overwritten.)
+          declare -A DIGEST
+          for img in $LIST; do
+            DIGEST[$img]=$(oc get istag $img:${{ inputs.source_tag }} -n $NS -o jsonpath='{.image.metadata.name}')
+            if [ -z "${DIGEST[$img]}" ]; then
+              echo "::error::could not resolve $img:${{ inputs.source_tag }} in $NS — nothing moved"; exit 1
+            fi
+          done
+          # PASS 2 · only now move tags — backup the current target, then re-point it
+          for img in $LIST; do
+            oc tag $NS/$img:prod $NS/$img:prod-backup --reference-policy=local || true
+            oc tag $NS/$img@${DIGEST[$img]} $NS/$img:prod --reference-policy=local
+          done
+
+      - name: "VERIFY — CronJobs don't roll out: confirm :prod now resolves to the promoted digest"
+        run: |
+          LIST="${{ inputs.images }}"
+          [ "$LIST" = "all" ] && LIST="job-scheduling"
+          NS=${{ secrets.OCP4_NAMESPACE }}
+          for img in $LIST; do
+            SRC=$(oc get istag $img:${{ inputs.source_tag }} -n $NS -o jsonpath='{.image.metadata.name}')
+            DST=$(oc get istag $img:prod -n $NS -o jsonpath='{.image.metadata.name}')
+            echo "source ($img:${{ inputs.source_tag }}) = $SRC"
+            echo "target ($img:prod)                     = $DST"
+            if [ -z "$DST" ] || [ "$SRC" != "$DST" ]; then
+              echo "::error::promotion digest mismatch for $img — :prod did not move to the source digest"; exit 1
+            fi
+            echo "OK — $img:prod now serves $DST; the next scheduled Job pulls it (imagePullPolicy: Always)."
+          done

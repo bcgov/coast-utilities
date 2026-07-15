@@ -1,0 +1,69 @@
+name: Promote Cornet Interface Service to TEST
+
+# [1] MANUAL ONLY — a human picks the source (a TAG). Single image.
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: "Source tag: latest · sha-<commit> (one exact build) · test-backup (= ROLLBACK)"
+        default: "latest"
+      images:
+        description: "Which image(s) move — dropdown: no typing, no typos"
+        type: choice
+        options:
+          - all
+          - cornet-interface-service
+        default: all
+
+# [2] GUARD RAIL · MINIMAL PERMISSIONS — GitHub token reads only; the cluster is reached via secrets
+permissions:
+  contents: read
+
+# [3] GUARD RAIL · ONE PROMOTION AT A TIME — runs QUEUE; a mid-move promotion is never cancelled
+concurrency:
+  group: promote-cornet-interface-service-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: test          # [4] test has no reviewers — passes straight through
+
+    # [5] install oc -> login -> PASS 1 resolve ALL digests -> PASS 2 backup + re-point -> VERIFY
+    steps:
+      - uses: redhat-actions/openshift-tools-installer@v1   # third-party — pin to commit SHA when hardening
+        with:
+          oc: "4"
+      - run: oc login --token=${{ secrets.OCP4_PASSWORD }} --server=${{ secrets.OPENSHIFT_SERVER }}
+
+      - name: "PASS 1 — resolve every digest first · PASS 2 — move tags. Half-promotion is impossible."
+        run: |
+          LIST="${{ inputs.images }}"
+          [ "$LIST" = "all" ] && LIST="cornet-interface-service"
+          NS=${{ secrets.OCP4_NAMESPACE }}
+          # PASS 1 · resolve ALL source digests BEFORE touching anything — a missing/typo'd
+          # source tag fails the WHOLE run here, with zero tags moved.
+          declare -A DIGEST
+          for img in $LIST; do
+            DIGEST[$img]=$(oc get istag $img:${{ inputs.source_tag }} -n $NS -o jsonpath='{.image.metadata.name}')
+            if [ -z "${DIGEST[$img]}" ]; then
+              echo "::error::could not resolve $img:${{ inputs.source_tag }} in $NS — nothing moved"; exit 1
+            fi
+          done
+          # PASS 2 · only now move tags — backup the current target, then re-point it
+          for img in $LIST; do
+            oc tag $NS/$img:test $NS/$img:test-backup --reference-policy=local || true
+            oc tag $NS/$img@${DIGEST[$img]} $NS/$img:test --reference-policy=local
+          done
+
+      - name: "VERIFY — done when pods are Ready, not when the tag moves"
+        run: |
+          LIST="${{ inputs.images }}"
+          [ "$LIST" = "all" ] && LIST="cornet-interface-service"
+          oc project f9a9e6-test
+          for img in $LIST; do
+            oc rollout status deployment/$img-argo --timeout=300s   # cornet-interface-service-argo
+          done
+          # VERIFY = rollout status only: the pipeline SA has 'view' (not exec), and the runner is off-network,
+          # so neither an in-pod 'oc exec' /hc nor an external curl works here. Ready pods = the verify.

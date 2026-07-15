@@ -1,0 +1,52 @@
+name: CI AEM Interface Service
+
+# [1] WHEN IT RUNS — PRs, merges, a twice-monthly re-scan, and a manual button.
+#     paths = this service's dir + the shared library it references (Shared.Database).
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "AEMInterfaceService/**"
+      - "Shared.Database/**"
+  push:
+    branches: [develop]
+    paths:
+      - "AEMInterfaceService/**"
+      - "Shared.Database/**"
+  schedule:
+    - cron: "0 3 1,15 * *"
+  workflow_dispatch:
+
+# [2] GUARD RAIL · LEAST PRIVILEGE — read code, write scan reports, nothing else
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+# [3] GUARD RAIL · ONE RUN AT A TIME — a newer push cancels the outdated run (per-service group)
+concurrency:
+  group: ci-aem-interface-service-${{ github.ref }}
+  cancel-in-progress: true
+
+# [4] THE JOB — 'gate' is the exact check name branch protection requires green
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    # [5] SETUP -> CodeQL init (before build so it traces compilation) -> compile -> CodeQL analyze
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          queries: security-extended
+
+      # ── compile the .NET service (also restores its Shared.Database project reference) ──
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet build AEMInterfaceService/AEMInterfaceService/aem-interface-service.csproj -c Release
+
+      # ── CodeQL writes its C# report over the build it just traced ──
+      - uses: github/codeql-action/analyze@v3

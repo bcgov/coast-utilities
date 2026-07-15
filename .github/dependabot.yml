@@ -1,13 +1,13 @@
-# Doc: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
-
+# .github/dependabot.yml — actions-only, monthly, one grouped PR.
+# Alerts + security-update PRs for app packages (nuget) come from the repo
+# security toggles, NOT this file — so app packages get zero robot upgrade spam.
 version: 2
 updates:
-  # NuGet dependencies - api
-  - package-ecosystem: "nuget"
-    directory: "."
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "19:00"
-    target-branch: "develop"
-    open-pull-requests-limit: 0
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
