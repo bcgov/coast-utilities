@@ -1,0 +1,34 @@
+name: Create issue on pipeline failure
+on:
+  workflow_run:
+    workflows: ["CI AEM Interface Service","CD AEM Interface Service","Promote AEM Interface Service to TEST","Promote AEM Interface Service to PROD","CI CAS Interface Service","CD CAS Interface Service","Promote CAS Interface Service to TEST","Promote CAS Interface Service to PROD","CI Cornet Interface Service","CD Cornet Interface Service","Promote Cornet Interface Service to TEST","Promote Cornet Interface Service to PROD","CI Job Scheduling","CD Job Scheduling","Promote Job Scheduling to TEST","Promote Job Scheduling to PROD"]
+    types: [completed]
+permissions:
+  issues: write
+  contents: read
+jobs:
+  ticket:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+            const title = `❌ ${run.name} failed on ${run.head_branch}`;
+            const body = [
+              `**Workflow:** ${run.name}`,
+              `**Run:** ${run.html_url}`,
+              `**Branch:** ${run.head_branch}`,
+              `**By:** @${run.actor.login}`,
+              `**Commit:** ${run.head_sha.slice(0,7)}`,
+            ].join('\n');
+            try { await github.rest.issues.createLabel({ owner, repo, name: 'pipeline-failure', color: 'B60205' }); } catch (e) {}
+            const q = `repo:${owner}/${repo} is:issue is:open label:pipeline-failure in:title "${run.name} failed"`;
+            const hit = await github.rest.search.issuesAndPullRequests({ q });
+            if (hit.data.total_count > 0) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: hit.data.items[0].number, body: `Failed again: ${run.html_url}` });
+            } else {
+              await github.rest.issues.create({ owner, repo, title, body, labels: ['pipeline-failure'], assignees: ['rohithvarmayadla'] });
+            }
