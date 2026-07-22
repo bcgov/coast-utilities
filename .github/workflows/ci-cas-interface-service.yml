@@ -36,17 +36,17 @@ jobs:
 
     # [5] SETUP -> CodeQL init (before build so it traces compilation) -> compile -> CodeQL analyze
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
         with:
           languages: csharp
           queries: security-extended
 
       # ── compile the .NET service (also restores its Shared.Database project reference) ──
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
       - run: dotnet build CASInterfaceService/CASInterfaceService/cas-interface-service.csproj -c Release
 
       # ── CodeQL writes its C# report over the build it just traced ──
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
