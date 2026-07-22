@@ -1,13 +1,47 @@
-# .github/dependabot.yml — actions-only, monthly, one grouped PR.
-# Alerts + security-update PRs for app packages (nuget) come from the repo
-# security toggles, NOT this file — so app packages get zero robot upgrade spam.
+# .github/dependabot.yml — version updates: actions + nuget + docker (no npm here).
+# Small (patch/minor) updates ONLY — majors are ignored everywhere, so big jumps
+# (.NET majors) arrive as security ALERTS to plan, never as surprise PRs.
+# One grouped PR per ecosystem, monthly, assigned for notification. CVE
+# security-update PRs come from the repo security toggles and respect the same
+# ignore-majors rules. Docker block keeps the digest-pinned FROMs fresh.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    assignees: ["rohithvarmayadla"]
     groups:
       actions:
-        patterns:
-          - "*"
+        patterns: ["*"]
+
+  # Glob so all four services + Shared.Database are covered
+  - package-ecosystem: nuget
+    directories: ["/**/*"]
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    assignees: ["rohithvarmayadla"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      nuget-safe:
+        patterns: ["*"]
+
+  # The four CD-built service Dockerfiles
+  - package-ecosystem: docker
+    directories:
+      - /CornetInterfaceService
+      - /AEMInterfaceService/AEMInterfaceService
+      - /CASInterfaceService/CASInterfaceService
+      - /job-scheduling/job-scheduling/openshift
+    schedule:
+      interval: monthly
+    assignees: ["rohithvarmayadla"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      docker:
+        patterns: ["*"]
