@@ -27,6 +27,7 @@ RUN dotnet publish "job-scheduling/job-scheduling/job-scheduling.csproj" -c Rele
 # Build runtime image
 FROM base AS final
 WORKDIR /app
+RUN groupadd --system appgroup && useradd --system --gid appgroup --no-create-home appuser
 
 # Accept build args and export as environment variables
 ARG BUILD_ID
@@ -40,4 +41,6 @@ COPY --from=publish /app/publish .
 RUN echo "${BUILD_ID}" > /app/build_id.txt && echo "${BUILD_VERSION}" > /app/version.txt
 
 # Set entrypoint for console application
+RUN chown -R appuser:appgroup /app
+USER appuser
 ENTRYPOINT ["dotnet", "job-scheduling.dll"]

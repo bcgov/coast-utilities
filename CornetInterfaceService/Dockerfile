@@ -27,6 +27,7 @@ RUN dotnet publish "CornetInterfaceService/CornetInterfaceService/cornet-interfa
 # Build runtime image
 FROM base AS final
 WORKDIR /app
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 # build args export to environment
 ARG BUILD_ID
@@ -41,4 +42,6 @@ RUN echo "${BUILD_ID}" > /app/build_id.txt && echo "${BUILD_VERSION}" > /app/ver
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://*:8080
+RUN chown -R appuser:appgroup /app
+USER appuser
 ENTRYPOINT ["dotnet", "cornet-interface-service.dll"]

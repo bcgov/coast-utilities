@@ -27,6 +27,7 @@ RUN dotnet publish "CASInterfaceService/CASInterfaceService/cas-interface-servic
 # Build runtime image
 FROM base AS final
 WORKDIR /app
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 # Accept build args and export as environment variables
 ARG BUILD_ID
@@ -41,4 +42,6 @@ RUN echo "${BUILD_ID}" > /app/build_id.txt && echo "${BUILD_VERSION}" > /app/ver
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://*:8080
+RUN chown -R appuser:appgroup /app
+USER appuser
 ENTRYPOINT ["dotnet", "cas-interface-service.dll"]
