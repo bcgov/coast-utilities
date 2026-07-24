@@ -41,9 +41,8 @@ jobs:
         with:
           images: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}/job-scheduling
           tags: |
-            type=raw,value=latest          # newest build — a promotion's default source
-            type=raw,value=development     # dev environment tag
-            type=sha                       # sha-<commit> — permanent per-commit bookmark
+            type=raw,value=latest
+            type=sha
       - uses: docker/build-push-action@v7
         with:
           context: .
