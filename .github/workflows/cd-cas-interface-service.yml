@@ -62,7 +62,7 @@ jobs:
           image-ref: ${{ secrets.OCP4_REGISTRY }}/${{ secrets.OCP4_NAMESPACE }}/cas-interface-service:latest
           format: sarif
           output: trivy-cas-interface-service.sarif
-      - uses: github/codeql-action/upload-sarif@v4
+      - uses: github/codeql-action/upload-sarif@v4.37.3
         with:
           sarif_file: trivy-cas-interface-service.sarif
           category: trivy-cas-interface-service

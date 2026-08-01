@@ -37,7 +37,7 @@ jobs:
     # [5] SETUP -> CodeQL init (before build so it traces compilation) -> compile -> CodeQL analyze
     steps:
       - uses: actions/checkout@v7
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@v4.37.3
         with:
           languages: csharp
           queries: security-extended
@@ -49,4 +49,4 @@ jobs:
       - run: dotnet build CASInterfaceService/CASInterfaceService/cas-interface-service.csproj -c Release
 
       # ── CodeQL writes its C# report over the build it just traced ──
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@v4.37.3
