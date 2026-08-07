@@ -42,6 +42,7 @@ RUN echo "${BUILD_ID}" > /app/build_id.txt && echo "${BUILD_VERSION}" > /app/ver
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://*:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
 RUN chown -R appuser:appgroup /app
 USER appuser
 ENTRYPOINT ["dotnet", "cas-interface-service.dll"]

@@ -1,137 +1,239 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Events;
+using Serilog.Exceptions;
+using Yarp.ReverseProxy.Transforms;
 
-namespace CASInterfaceService
+// Bootstrap Serilog before the host is built so startup errors are captured
+var bootstrapConfig = new ConfigurationBuilder()
+    .AddEnvironmentVariables()
+    .AddUserSecrets<Program>()
+    .Build();
+
+ConfigureSerilog(bootstrapConfig);
+
+try
 {
-    public class Program
+    var builder = WebApplication.CreateBuilder(args);
+    builder.WebHost.UseUrls("http://*:8080");
+
+    // Load the YARP reverse proxy configuration from a dedicated file if present
+    builder.Configuration.AddJsonFile("yarp.reverseproxy.json", optional: true, reloadOnChange: true);
+
+    builder.Services.AddHttpLogging(logging =>
     {
-        private const string URL = "https://<server>:<port>ords/cas/cfs/apinvoice/";
-        private const string TokenURL = "https://<server>:<port>/ords/casords/oauth/token";
+        logging.CombineLogs = true;
+        logging.LoggingFields = HttpLoggingFields.All;
+        logging.RequestBodyLogLimit = 8192;
+        logging.ResponseBodyLogLimit = 8192;
+    });
 
-        public static void Main(string[] args)
+    builder.Services.AddHealthChecks();
+
+    builder.Services
+        .AddAuthentication(options =>
         {
-            //CreateWebHostBuilder(args).Build().Run();
+            options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(
+            JwtBearerDefaults.AuthenticationScheme,
+            options =>
+            {
+                builder.Configuration.GetSection("jwt").Bind(options);
+                Console.WriteLine($"JWT - Authority: {options.Authority}");
+                Console.WriteLine($"JWT - Audience: {options.Audience}");
 
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    RequireAudience = true,
+                    ValidateAudience = true,
+                    ValidAudience = options.Audience,
+                    ValidateIssuer = true,
+                    ValidIssuer = options.Authority,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    RequireSignedTokens = true,
+                    RequireExpirationTime = true,
+                    ClockSkew = TimeSpan.FromSeconds(60),
+                };
 
-            //var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
-            //var url = config["ASPNETCORE_URLS"] ?? "http://*:8080";
-            //var host = new WebHostBuilder()
-            //    .UseKestrel()
-            //    .UseContentRoot(Directory.GetCurrentDirectory())
-            //    .UseIISIntegration()
-            //    //.UseStartup()
-            //    .UseUrls(url)
-            //    .Build();
-            //host.Run();
-
-
-            //var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
-            //var url = config["ASPNETCORE_URLS"] ?? "http://*:8080";
-            //var host = new WebHostBuilder()
-            //    .UseKestrel()
-            //    .UseContentRoot(Directory.GetCurrentDirectory())
-            //    .UseIISIntegration()
-            //    //.UseStartup()
-            //    .UseUrls(url)
-            //    .Build();
-            //host.Run();
-
-            CreateWebHostBuilder(args)
-                //.UseKestrel(options =>
-                //{
-                //    // options.ThreadCount = 4;
-                //    options.NoDelay = true;
-                //    options.UseConnectionLogging();
-                //})
-
-                .UseUrls("http://*:8080")
-                .Build()
-                .Run();
-
-            // The following section should be used to demo sockets
-            //var addresses = application.GetAddresses();
-            //addresses.Clear();
-            //addresses.Add("http://unix:/tmp/kestrel-test.sock");
-
-        }
-
-        public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
-            WebHost
-                .CreateDefaultBuilder(args)
-                .ConfigureAppConfiguration(
-                    (hostingContext, configBuilder) =>
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = async ctx =>
                     {
-                        // Load the Yarp reverse proxy configuration
-                        configBuilder.AddJsonFile("yarp.reverseproxy.json", optional: true, reloadOnChange: true);
-                    }
-                )
-                .UseStartup<Startup>();
+                        await Task.CompletedTask;
+                        var hasAuthHeader = !string.IsNullOrWhiteSpace(ctx.Request.Headers["Authorization"]);
+                        Console.WriteLine($"JWT - Message received. HasAuthorizationHeader: {hasAuthHeader}");
+                    },
+                    OnTokenValidated = async ctx =>
+                    {
+                        await Task.CompletedTask;
+                        var userId =
+                            ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                            ?? ctx.Principal?.FindFirst("sub")?.Value;
+                        Console.WriteLine($"JWT - Token validated. UserId: {userId}");
+                    },
+                    OnAuthenticationFailed = async ctx =>
+                    {
+                        await Task.CompletedTask;
+                        Console.WriteLine("JWT - Authentication failed.");
+                    },
+                    OnChallenge = async ctx =>
+                    {
+                        await Task.CompletedTask;
+                        Console.WriteLine(
+                            $"JWT - Challenge. Error: {ctx.Error}; Description: {ctx.ErrorDescription}"
+                        );
+                    },
+                };
 
-        public void CallCAS()
+                options.Validate();
+            }
+        );
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy(
+            JwtBearerDefaults.AuthenticationScheme,
+            policy =>
+            {
+                policy
+                    .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                    .RequireAuthenticatedUser();
+            }
+        );
+        options.DefaultPolicy = options.GetPolicy(JwtBearerDefaults.AuthenticationScheme) ?? null!;
+    });
+
+    builder.Services.AddSerilog();
+
+    builder.Services.AddControllers().AddNewtonsoftJson();
+
+    builder.Services
+        .AddReverseProxy()
+        .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+        .AddTransforms(builderContext =>
         {
-            HttpClient client = new HttpClient();
-            client.BaseAddress = new Uri(URL);
+            // After the incoming JWT is validated, replace the Authorization header
+            // on the proxied request with Basic credentials for the downstream API.
+            builderContext.AddRequestTransform(transformContext =>
+            {
+                var username = builder.Configuration["CorVSUDynAPI:Username"];
+                var password = builder.Configuration["CorVSUDynAPI:Password"];
 
-            // Add an Accept header for JSON format.
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenURL);
-            //client.PostAsJsonAsync<HttpResponseMessage>(client.BaseAddress,new HttpResponseMessage tmpResponse());
-            //var result = await client.GetAsync(URL);
-            
+                if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(password))
+                {
+                    var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}"));
+                    transformContext.ProxyRequest.Headers.Authorization = new AuthenticationHeaderValue(
+                        "Basic",
+                        encoded
+                    );
+                }
 
+                return ValueTask.CompletedTask;
+            });
+        });
 
-            //OAuthResponse requestToken = OAuth.AcquireRequestToken("http://www.www.com", "Post");
+    var app = builder.Build();
 
+    app.UseExceptionHandler(appBuilder =>
+    {
+        appBuilder.Run(async context =>
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"An unexpected error occurred.\"}");
+        });
+    });
 
-            WebRequest request = WebRequest.Create("http://www.temp.com/?param1=x&param2=y");
-            request.Method = "GET";
-            WebResponse response = request.GetResponse();
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.GetLevel = (httpContext, elapsed, ex) =>
+        {
+            if (ex != null)
+                return LogEventLevel.Error;
 
+            var path = httpContext.Request.Path.ToString();
 
+            if (path.StartsWith("/hc", StringComparison.OrdinalIgnoreCase))
+                return httpContext.Response.StatusCode >= 500
+                    ? LogEventLevel.Error
+                    : LogEventLevel.Verbose;
 
-            //var client = new RestClient("https://service.endpoint.com/api/oauth2/token");
-            //var request = new RestRequest(Method.POST);
-            //request.AddHeader("cache-control", "no-cache");
-            //request.AddHeader("content-type", "application/x-www-form-urlencoded");
-            //request.AddParameter("application/x-www-form-urlencoded", "grant_type=client_credentials&client_id=abc&client_secret=123", ParameterType.RequestBody);
-            //IRestResponse response = client.Execute(request);
+            return httpContext.Response.StatusCode >= 400
+                ? LogEventLevel.Warning
+                : LogEventLevel.Information;
+        };
+    });
 
+    app.UseRouting();
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapControllers();
+    app.MapHealthChecks("/hc");
+    app.MapReverseProxy();
 
+    app.Run();
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
+static void ConfigureSerilog(IConfiguration config)
+{
+    var loggerConfig = new LoggerConfiguration()
+        .Enrich.FromLogContext()
+        .Enrich.WithExceptionDetails()
+        .WriteTo.Console();
 
+    var isDevelopment = (config["ASPNETCORE_ENVIRONMENT"] ?? "Production")
+        .Equals("Development", StringComparison.OrdinalIgnoreCase);
 
-            //// List data response.
-            //HttpResponseMessage response = client.GetAsync(urlParameters).Result;  // Blocking call! Program will wait here until a response is received or a timeout occurs.
-            //if (response.IsSuccessStatusCode)
-            //{
-            //    // Parse the response body.
-            //    var dataObjects = response.Content.ReadAsAsync<IEnumerable<DataObject>>().Result;  //Make sure to add a reference to System.Net.Http.Formatting.dll
-            //    foreach (var d in dataObjects)
-            //    {
-            //        Console.WriteLine("{0}", d.Name);
-            //    }
-            //}
-            //else
-            //{
-            //    Console.WriteLine("{0} ({1})", (int)response.StatusCode, response.ReasonPhrase);
-            //}
-
-            //Make any other calls using HttpClient here.
-
-            //Dispose once all HttpClient calls are complete. This is not necessary if the containing object will be disposed of; for example in this case the HttpClient instance will be disposed automatically when the application terminates so the following call is superfluous.
-            client.Dispose();
+    if (
+        !isDevelopment
+        && !string.IsNullOrEmpty(config["SPLUNK_COLLECTOR_URL"])
+        && !string.IsNullOrEmpty(config["SPLUNK_TOKEN"])
+    )
+    {
+        var fields = new Serilog.Sinks.Splunk.CustomFields();
+        if (!string.IsNullOrEmpty(config["SPLUNK_CHANNEL"]))
+        {
+            fields.CustomFieldList.Add(
+                new Serilog.Sinks.Splunk.CustomField("channel", config["SPLUNK_CHANNEL"])
+            );
         }
 
-    }
+        loggerConfig.WriteTo.EventCollector(
+            splunkHost: config["SPLUNK_COLLECTOR_URL"],
+            sourceType: "cornet-interface",
+            eventCollectorToken: config["SPLUNK_TOKEN"],
+            restrictedToMinimumLevel: LogEventLevel.Information,
+            messageHandler: new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true,
+            }
+        );
 
+        Log.Logger = loggerConfig.CreateLogger();
+        Serilog.Debugging.SelfLog.Enable(Console.Error);
+        Log.Logger.Information("Cornet Interface Container Started");
+    }
+    else
+    {
+        Log.Logger = loggerConfig.CreateLogger();
+    }
 }

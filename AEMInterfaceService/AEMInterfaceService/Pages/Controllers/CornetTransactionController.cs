@@ -26,11 +26,6 @@ namespace AEMInterfaceService.Pages.Controllers
     [ApiController]
     public class CornetTransactionController : Controller
     {
-        private string URL = "";
-        private string TokenURL = "";
-        private string clientID = "";
-        private string secret = "";
-
         private readonly IConfiguration _configuration;
         //private readonly IHttpContextAccessor _httpContextAccessor;
 
@@ -73,9 +68,9 @@ namespace AEMInterfaceService.Pages.Controllers
                 //}
                 //else
                 //{
-                    cornetregreply.ResponseMessage = "Failure";
-                    cornetregreply.ResponseCode = t.Result;
-                    Console.WriteLine(DateTime.Now + " Response Fail");
+                cornetregreply.ResponseMessage = "Failure";
+                cornetregreply.ResponseCode = t.Result;
+                Console.WriteLine(DateTime.Now + " Response Fail");
                 //}
             }
 
@@ -226,7 +221,7 @@ namespace AEMInterfaceService.Pages.Controllers
 
                 return Ok(casregreply);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine(DateTime.Now + " Error in InsertCornetTransaction. " + e.ToString());
                 return StatusCode(e.HResult);
