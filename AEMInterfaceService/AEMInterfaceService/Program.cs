@@ -1,67 +1,101 @@
-﻿using Microsoft.AspNetCore.Hosting;
+﻿using System;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 
-namespace AEMInterfaceService
-{
-    public class Program
+var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls("http://*:8080");
+
+// Configure JWT Authentication
+builder.Services
+    .AddAuthentication(options =>
     {
-        public static void Main(string[] args)
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+    {
+        var audience = builder.Configuration["jwt:Audience"];
+        var authority = builder.Configuration["jwt:Authority"];
+
+        options.Authority = authority;
+        options.Audience = audience;
+
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            CreateHostBuilder(args).Build().Run();
+            RequireAudience = true,
+            ValidateAudience = true,
+            ValidAudience = audience,
+            ValidateIssuer = true,
+            ValidIssuer = authority,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            RequireSignedTokens = true,
+            RequireExpirationTime = true,
+            ClockSkew = TimeSpan.FromSeconds(60),
+        };
 
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = async ctx =>
+            {
+                await Task.CompletedTask;
+                var hasAuthHeader = !string.IsNullOrWhiteSpace(ctx.Request.Headers["Authorization"]);
+                Console.WriteLine($"JWT - Message received. HasAuthorizationHeader: {hasAuthHeader}");
+            },
+            OnTokenValidated = async ctx =>
+            {
+                await Task.CompletedTask;
+                var userId = ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                          ?? ctx.Principal?.FindFirst("sub")?.Value;
+                Console.WriteLine($"JWT - Token validated. UserId: {userId}");
+            },
+            OnAuthenticationFailed = async ctx =>
+            {
+                await Task.CompletedTask;
+                Console.WriteLine("JWT - Authentication failed.");
+            },
+            OnChallenge = async ctx =>
+            {
+                await Task.CompletedTask;
+                Console.WriteLine($"JWT - Challenge. Error: {ctx.Error}; Description: {ctx.ErrorDescription}");
+            },
+        };
 
-            //var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
-            //var url = config["ASPNETCORE_URLS"] ?? "http://*:8080";
-            //var host = new WebHostBuilder()
-            //    .UseKestrel()
-            //    .UseContentRoot(Directory.GetCurrentDirectory())
-            //    .UseIISIntegration()
-            //    //.UseStartup()
-            //    .UseUrls(url)
-            //    .Build();
-            //host.Run();
+        options.Validate();
+    });
 
+builder.Services.AddControllers();
 
-            //var config = new ConfigurationBuilder().AddEnvironmentVariables("").Build();
-            //var url = config["ASPNETCORE_URLS"] ?? "http://*:8080";
-            //var host = new WebHostBuilder()
-            //    .UseKestrel()
-            //    .UseContentRoot(Directory.GetCurrentDirectory())
-            //    .UseIISIntegration()
-            //    //.UseStartup()
-            //    .UseUrls(url)
-            //    .Build();
-            //host.Run();
+var app = builder.Build();
 
-            //var host = new WebHostBuilder()
-            //.UseKestrel(options =>
-            //{
-            //    // options.ThreadCount = 4;
-            //    options.NoDelay = true;
-            //    options.UseConnectionLogging();
-            //})
-            //.UseKestrel()
-            //.UseUrls("http://*:8080")
-            //.UseContentRoot(Directory.GetCurrentDirectory())
-            //.UseStartup<Startup>()
-            //.Build();
-
-            // The following section should be used to demo sockets
-            //var addresses = application.GetAddresses();
-            //addresses.Clear();
-            //addresses.Add("http://unix:/tmp/kestrel-test.sock");
-
-            //host.Run();
-        }
-
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseUrls("http://*:8080");
-                    webBuilder.UseStartup<Startup>();
-                });
-
-    }
-
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
 }
+else
+{
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"An unexpected error occurred.\"}");
+        });
+    });
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();
