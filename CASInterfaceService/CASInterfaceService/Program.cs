@@ -146,29 +146,18 @@ static void ConfigureSplunk(LoggerConfiguration loggerConfig, IConfiguration con
 {
     string splunkUrl = config["SPLUNK_COLLECTOR_URL"];
     string splunkToken = config["SPLUNK_TOKEN"];
+    bool isDevelopment = (config["ASPNETCORE_ENVIRONMENT"] ?? "Production")
+        .Equals("Development", StringComparison.OrdinalIgnoreCase);
 
-    if (!string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
+    if (!isDevelopment && !string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
     {
-        HttpClientHandler handler = null;
-
-        if (config["ASPNETCORE_ENVIRONMENT"] == "Development")
-        {
-            Log.Debug("Development environment detected - accepting any SSL certificate for Splunk");
-            handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback =
-                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
-            };
-        }
-
         loggerConfig.WriteTo.EventCollector(
             splunkHost: splunkUrl,
             eventCollectorToken: splunkToken,
             restrictedToMinimumLevel: LogEventLevel.Information,
             source: "cas-api",
             sourceType: "coast:cas-api",
-            host: Environment.MachineName,
-            messageHandler: handler);
+            host: Environment.MachineName);
 
         Log.Logger = loggerConfig.CreateLogger();
         Log.Information("Serilog configured with Splunk sink at {SplunkUrl} (source: cas-api, sourceType: coast:cas-api)",
