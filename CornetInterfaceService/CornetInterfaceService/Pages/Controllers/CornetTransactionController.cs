@@ -24,11 +24,6 @@ namespace CASInterfaceService.Pages.Controllers
     [Authorize]
     public class CornetTransactionController : Controller
     {
-        private string URL = "";
-        private string TokenURL = "";
-        private string clientID = "";
-        private string secret = "";
-
         private readonly IConfiguration _configuration;
         private readonly ILogger _logger;
         //private readonly IHttpContextAccessor _httpContextAccessor;
@@ -235,7 +230,7 @@ namespace CASInterfaceService.Pages.Controllers
 
                 return Ok(casregreply);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine(DateTime.Now + " Error in InsertCornetTransaction. " + e.ToString());
                 return StatusCode(e.HResult);
