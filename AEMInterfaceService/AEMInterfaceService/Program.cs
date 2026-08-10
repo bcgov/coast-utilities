@@ -90,6 +90,7 @@ try
             options.Validate();
         });
 
+    builder.Services.AddHealthChecks();
     builder.Services.AddSerilog();
     builder.Services.AddControllers();
 
@@ -137,6 +138,7 @@ try
     app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();
+    app.MapHealthChecks("/hc");
     app.MapControllers();
 
     app.Run();
