@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -37,7 +37,7 @@ namespace AEMInterfaceService.Pages.Controllers
             var headers = re.Headers;
 
             // Get secret information
-            Console.WriteLine(DateTime.Now + " Get Secret information.");
+            Console.WriteLine(DateTime.UtcNow + " Get Secret information.");
             var builder = new ConfigurationBuilder()
                 .AddEnvironmentVariables()
                 .AddUserSecrets<Program>(); // must also define a project guid for secrets in the .cspro – add tag <UserSecretsId> containing a guid
@@ -49,7 +49,7 @@ namespace AEMInterfaceService.Pages.Controllers
             secret = headers["secret"].ToString();
             clientID = headers["clientID"].ToString();
 
-            Console.WriteLine(DateTime.Now + " In RegisterCASAPTransaction");
+            Console.WriteLine(DateTime.UtcNow + " In RegisterCASAPTransaction");
             CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
             CASAPTransactionRegistration.getInstance().Add(casAPTransaction);
             //casregreply.RegistrationStatus = "Success";
@@ -65,10 +65,10 @@ namespace AEMInterfaceService.Pages.Controllers
             try
             {
                 // Start by getting token
-                Console.WriteLine(DateTime.Now + " Starting sendTransactionsToCAS (CASAPTransactionController).");
+                Console.WriteLine(DateTime.UtcNow + " Starting sendTransactionsToCAS (CASAPTransactionController).");
 
                 HttpClientHandler handler = new HttpClientHandler();
-                Console.WriteLine(DateTime.Now + " GET: + " + TokenURL);
+                Console.WriteLine(DateTime.UtcNow + " GET: + " + TokenURL);
 
                 HttpClient client = new HttpClient(handler);
 
@@ -79,12 +79,12 @@ namespace AEMInterfaceService.Pages.Controllers
                 var formData = new List<KeyValuePair<string, string>>();
                 formData.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
 
-                Console.WriteLine(DateTime.Now + " Add credentials");
+                Console.WriteLine(DateTime.UtcNow + " Add credentials");
                 request.Content = new FormUrlEncodedContent(formData);
                 var response = await client.SendAsync(request);
 
                 response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                Console.WriteLine(DateTime.Now + " Response Received: " + response.StatusCode);
+                Console.WriteLine(DateTime.UtcNow + " Response Received: " + response.StatusCode);
                 response.EnsureSuccessStatusCode();
 
                 // Put token alone in responseToken
@@ -92,7 +92,7 @@ namespace AEMInterfaceService.Pages.Controllers
                 var jo = JObject.Parse(responseBody);
                 string responseToken = jo["access_token"].ToString();
 
-                Console.WriteLine(DateTime.Now + " Received token successfully, now to send package to CAS.");
+                Console.WriteLine(DateTime.UtcNow + " Received token successfully, now to send package to CAS.");
 
                 // Token received, now send package using token
                 using (var packageClient = new HttpClient())
@@ -101,24 +101,24 @@ namespace AEMInterfaceService.Pages.Controllers
                     var jsonString = JsonConvert.SerializeObject(casAPTransaction);
                     //HttpContent postContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
                     HttpContent postContent = new StringContent(jsonString);
-                    Console.WriteLine(DateTime.Now + " JSON: " + jsonString);
+                    Console.WriteLine(DateTime.UtcNow + " JSON: " + jsonString);
                     HttpResponseMessage packageResult = await packageClient.PostAsync(URL, postContent);
 
-                    Console.WriteLine(DateTime.Now + " This was the result: " + packageResult.StatusCode);
+                    Console.WriteLine(DateTime.UtcNow + " This was the result: " + packageResult.StatusCode);
                     //outputMessage = Convert.ToString(packageResult.StatusCode);
                     outputMessage = Convert.ToString(packageResult.Content.ReadAsStringAsync().Result);
-                    Console.WriteLine(DateTime.Now + " Output Message: " + outputMessage);
+                    Console.WriteLine(DateTime.UtcNow + " Output Message: " + outputMessage);
 
                     if (packageResult.StatusCode == HttpStatusCode.Unauthorized)
                     {
-                        Console.WriteLine(DateTime.Now + " Ruh Roh, there was an error: " + packageResult.StatusCode);
+                        Console.WriteLine(DateTime.UtcNow + " Ruh Roh, there was an error: " + packageResult.StatusCode);
                     }
                 }
             }
             catch (Exception e)
             {
                 var errorContent = new StringContent(casAPTransaction.ToString(), Encoding.UTF8, "application/json");
-                Console.WriteLine(DateTime.Now + " Error in RegisterCASAPTransaction. Invoice: " + casAPTransaction.invoiceNumber);
+                Console.WriteLine(DateTime.UtcNow + " Error in RegisterCASAPTransaction. Invoice: " + casAPTransaction.invoiceNumber);
                 dynamic errorObject = new JObject();
                 errorObject.invoice_number = null;
                 errorObject.CAS_Returned_Messages = "Generic Error: " + e.Message;
@@ -126,7 +126,7 @@ namespace AEMInterfaceService.Pages.Controllers
             }
 
             var xjo = JObject.Parse(outputMessage);
-            Console.WriteLine(DateTime.Now + " Successfully sent invoice: " + casAPTransaction.invoiceNumber);
+            Console.WriteLine(DateTime.UtcNow + " Successfully sent invoice: " + casAPTransaction.invoiceNumber);
             return xjo;
         }
 
@@ -135,7 +135,7 @@ namespace AEMInterfaceService.Pages.Controllers
         {
             try
             {
-                Console.WriteLine(DateTime.Now + " In InsertCASAPTransaction");
+                Console.WriteLine(DateTime.UtcNow + " In InsertCASAPTransaction");
                 CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
                 CASAPTransactionRegistration.getInstance().Add(casAPTransaction);
                 casregreply.RegistrationStatus = "Success";
@@ -148,7 +148,7 @@ namespace AEMInterfaceService.Pages.Controllers
             }
             catch(Exception e)
             {
-                Console.WriteLine(DateTime.Now + " Error in InsertCASAPTransaction. " + e.ToString());
+                Console.WriteLine(DateTime.UtcNow + " Error in InsertCASAPTransaction. " + e.ToString());
                 return StatusCode(e.HResult);
             }
 
