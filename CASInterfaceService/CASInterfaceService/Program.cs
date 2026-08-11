@@ -133,7 +133,7 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
-    app.MapHealthChecks("/hc");
+    app.MapHealthChecks("/hc").AllowAnonymous();
 
     app.Run();
 }
