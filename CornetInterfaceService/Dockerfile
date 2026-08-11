@@ -29,6 +29,9 @@ FROM base AS final
 WORKDIR /app
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
+# package is updated to include the new America/Vancouver permanent-offset rule.
+RUN apk add --no-cache tzdata
+
 # build args export to environment
 ARG BUILD_ID
 ARG BUILD_VERSION

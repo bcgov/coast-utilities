@@ -29,6 +29,9 @@ FROM base AS final
 WORKDIR /app
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
+# Install tzdata so TimeZoneInfo can resolve IANA timezone names on Alpine.
+RUN apk add --no-cache tzdata
+
 # Accept build args and export as environment variables
 ARG BUILD_ID
 ARG BUILD_VERSION

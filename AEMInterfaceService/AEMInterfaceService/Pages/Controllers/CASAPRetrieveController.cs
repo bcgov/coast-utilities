@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -50,14 +50,14 @@ namespace AEMInterfaceService.Pages.Controllers
             secret = headers["secret"].ToString();
             clientID = headers["clientID"].ToString();
 
-            Console.WriteLine(DateTime.Now + " In RegisterCASAPTransaction");
+            Console.WriteLine(DateTime.UtcNow + " In RegisterCASAPTransaction");
             CASAPTransactionRegistrationReply casregreply = new CASAPTransactionRegistrationReply();
             CASAPQueryRegistration.getInstance().Add(casAPQuery);
 
             try
             {
                 // Start by getting token
-                Console.WriteLine(DateTime.Now + " Starting sendTransactionsToCAS (CASAPRetreiveController).");
+                Console.WriteLine(DateTime.UtcNow + " Starting sendTransactionsToCAS (CASAPRetreiveController).");
 
                 // Get secret information
                 Console.WriteLine("Get Secret information.");
@@ -69,7 +69,7 @@ namespace AEMInterfaceService.Pages.Controllers
                 TokenURL = Configuration["CAS_API_URI"] + "oauth/token"; // CAS AP Token URL
 
                 HttpClientHandler handler = new HttpClientHandler();
-                Console.WriteLine(DateTime.Now + " GET: + " + TokenURL);
+                Console.WriteLine(DateTime.UtcNow + " GET: + " + TokenURL);
 
                 HttpClient client = new HttpClient(handler);
 
@@ -80,7 +80,7 @@ namespace AEMInterfaceService.Pages.Controllers
                 var formData = new List<KeyValuePair<string, string>>();
                 formData.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
 
-                Console.WriteLine(DateTime.Now + " Add credentials");
+                Console.WriteLine(DateTime.UtcNow + " Add credentials");
                 request.Content = new FormUrlEncodedContent(formData);
                 var response = await client.SendAsync(request);
 
@@ -93,7 +93,7 @@ namespace AEMInterfaceService.Pages.Controllers
                 var jo = JObject.Parse(responseBody);
                 string responseToken = jo["access_token"].ToString();
 
-                Console.WriteLine(DateTime.Now + " Received token successfully, now to send request to CAS.");
+                Console.WriteLine(DateTime.UtcNow + " Received token successfully, now to send request to CAS.");
 
                 // Token received, now send package using token
                 using (var packageClient = new HttpClient())
@@ -110,7 +110,7 @@ namespace AEMInterfaceService.Pages.Controllers
                     var xjo = JObject.Parse(xresponseBody);
 
                     // Return JSON response from CAS
-                    Console.WriteLine(DateTime.Now + " Successfully found invoice: " + casAPQuery.invoiceNumber);
+                    Console.WriteLine(DateTime.UtcNow + " Successfully found invoice: " + casAPQuery.invoiceNumber);
                     return xjo;
                 }
             }
@@ -118,7 +118,7 @@ namespace AEMInterfaceService.Pages.Controllers
             {
                 if (e.HResult == -2146233088)
                 { // Handle error where invoice number / Supplier / Site does not exist
-                    Console.WriteLine(DateTime.Now + " Error in GetTransactionRecords. Invoice: " + casAPQuery.invoiceNumber + ". Supplier: " + casAPQuery.supplierNumber + ". Site: " + casAPQuery.supplierSiteNumber + ". Invoice/Supplier/Site does not exist.");
+                    Console.WriteLine(DateTime.UtcNow + " Error in GetTransactionRecords. Invoice: " + casAPQuery.invoiceNumber + ". Supplier: " + casAPQuery.supplierNumber + ". Site: " + casAPQuery.supplierSiteNumber + ". Invoice/Supplier/Site does not exist.");
                     dynamic errorObject = new JObject();
                     errorObject.invoice_number = casAPQuery.invoiceNumber;
                     errorObject.invoice_status = "Not Found";
@@ -139,7 +139,7 @@ namespace AEMInterfaceService.Pages.Controllers
                 else
                 { // Handle all other errors
                     var errorContent = new StringContent(casAPQuery.ToString(), Encoding.UTF8, "application/json");
-                    Console.WriteLine(DateTime.Now + " Error in GetTransactionRecords. Invoice: " + casAPQuery.invoiceNumber + ". " + e.Message);
+                    Console.WriteLine(DateTime.UtcNow + " Error in GetTransactionRecords. Invoice: " + casAPQuery.invoiceNumber + ". " + e.Message);
                     dynamic errorObject = new JObject();
                     errorObject.invoice_number = casAPQuery.invoiceNumber;
                     errorObject.invoice_status = e.Message;

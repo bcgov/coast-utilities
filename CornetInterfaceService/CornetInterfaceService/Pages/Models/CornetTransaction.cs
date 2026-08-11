@@ -31,9 +31,9 @@ namespace CASInterfaceService.Pages.Models
             set { MessageEventTypeCD = value; }
         }
 
-        DateTime EventDTM;
+        DateTimeOffset EventDTM;
         [Required]
-        public DateTime event_dtm
+        public DateTimeOffset event_dtm
         {
             get { return EventDTM; }
             set { EventDTM = value; }
