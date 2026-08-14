@@ -382,26 +382,7 @@ namespace AEMInterfaceService.Pages.Controllers
                 Console.WriteLine(DateTime.UtcNow + " Error in GetDynamicsHttpClientNew: " + e.Message);
                 return new Tuple<int, HttpResponseMessage, string>(100, null, "Error: " + e.Message);
             }
-        }
-
-        [HttpPost("InsertCornetTransaction")]
-        public IActionResult InsertCornetTransaction(CornetTransaction cornetTransaction)
-        {
-            try
-            {
-                Console.WriteLine(DateTime.UtcNow + " In InsertCornetTransaction");
-                CornetTransactionRegistrationReply casregreply = new CornetTransactionRegistrationReply();
-                CornetTransactionRegistration.getInstance().Add(cornetTransaction);
-                casregreply.ResponseMessage = "Success";
-
-                return Ok(casregreply);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(DateTime.UtcNow + " Error in InsertCornetTransaction. " + e.ToString());
-                return StatusCode(e.HResult);
-            }
-        }
+        }        
 
         internal class DynamicsResponse
         {
