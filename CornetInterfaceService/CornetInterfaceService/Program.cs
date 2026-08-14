@@ -201,6 +201,9 @@ try
                     ? LogEventLevel.Error
                     : LogEventLevel.Verbose;
 
+            if (httpContext.Response.StatusCode == 401)
+                return LogEventLevel.Error;
+
             return httpContext.Response.StatusCode >= 400
                 ? LogEventLevel.Warning
                 : LogEventLevel.Information;
