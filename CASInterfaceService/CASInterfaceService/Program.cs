@@ -12,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 
@@ -87,6 +88,32 @@ try
     builder.Services.AddSerilog();
     builder.Services.AddControllers().AddNewtonsoftJson();
 
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Enter your JWT token (without the 'Bearer ' prefix).",
+            });
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                [
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference { Id = "Bearer", Type = ReferenceType.SecurityScheme },
+                    }
+                ] = [],
+            });
+        });
+    }
+
     var app = builder.Build();
 
     // Exception handling must be outermost in the pipeline
@@ -128,12 +155,19 @@ try
         };
     });
 
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+    
     app.UseHttpsRedirection();
     app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
     app.MapHealthChecks("/hc").AllowAnonymous();
+
 
     app.Run();
 }
