@@ -17,6 +17,7 @@ using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 using Serilog.Exceptions;
+using Yarp.ReverseProxy.Model;
 using Yarp.ReverseProxy.Transforms;
 
 // Bootstrap Serilog before the host is built so startup errors are captured
@@ -187,8 +188,22 @@ try
         });
     });
 
+    app.UseHttpLogging();
+
     app.UseSerilogRequestLogging(options =>
     {
+        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+        {
+            var proxyFeature = httpContext.Features.Get<IReverseProxyFeature>();
+            if (proxyFeature is not null)
+            {
+                diagnosticContext.Set("ProxyRouteId", proxyFeature.Route.Config.RouteId);
+                diagnosticContext.Set("ProxyClusterId", proxyFeature.Cluster.Config.ClusterId);
+                if (proxyFeature.ProxiedDestination is not null)
+                    diagnosticContext.Set("ProxyDestinationId", proxyFeature.ProxiedDestination.DestinationId);
+            }
+        };
+
         options.GetLevel = (httpContext, elapsed, ex) =>
         {
             if (ex != null)
