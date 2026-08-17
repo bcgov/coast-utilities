@@ -11,10 +11,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 using Serilog.Exceptions;
+using Yarp.ReverseProxy.Model;
 using Yarp.ReverseProxy.Transforms;
 
 // Bootstrap Serilog before the host is built so startup errors are captured
@@ -122,6 +125,32 @@ try
 
     builder.Services.AddControllers().AddNewtonsoftJson();
 
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Enter your JWT token (without the 'Bearer ' prefix).",
+            });
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                [
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference { Id = "Bearer", Type = ReferenceType.SecurityScheme },
+                    }
+                ] = [],
+            });
+        });
+    }
+
     builder.Services
         .AddReverseProxy()
         .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
@@ -159,8 +188,22 @@ try
         });
     });
 
+    app.UseHttpLogging();
+
     app.UseSerilogRequestLogging(options =>
     {
+        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+        {
+            var proxyFeature = httpContext.Features.Get<IReverseProxyFeature>();
+            if (proxyFeature is not null)
+            {
+                diagnosticContext.Set("ProxyRouteId", proxyFeature.Route.Config.RouteId);
+                diagnosticContext.Set("ProxyClusterId", proxyFeature.Cluster.Config.ClusterId);
+                if (proxyFeature.ProxiedDestination is not null)
+                    diagnosticContext.Set("ProxyDestinationId", proxyFeature.ProxiedDestination.DestinationId);
+            }
+        };
+
         options.GetLevel = (httpContext, elapsed, ex) =>
         {
             if (ex != null)
@@ -173,11 +216,20 @@ try
                     ? LogEventLevel.Error
                     : LogEventLevel.Verbose;
 
+            if (httpContext.Response.StatusCode == 401)
+                return LogEventLevel.Error;
+
             return httpContext.Response.StatusCode >= 400
                 ? LogEventLevel.Warning
                 : LogEventLevel.Information;
         };
     });
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
 
     app.UseRouting();
     app.UseAuthentication();

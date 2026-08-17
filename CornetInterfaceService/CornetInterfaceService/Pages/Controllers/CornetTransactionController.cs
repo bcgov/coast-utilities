@@ -15,8 +15,6 @@ using Serilog;
 using Shared.Database;
 using Microsoft.Extensions.DependencyInjection;
 
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-
 namespace CASInterfaceService.Pages.Controllers
 {
     [Route("api/[controller]")]
@@ -25,70 +23,50 @@ namespace CASInterfaceService.Pages.Controllers
     public class CornetTransactionController : Controller
     {
         private readonly IConfiguration _configuration;
-        private readonly ILogger _logger;
-        //private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public CornetTransactionController(IConfiguration configuration)//, IHttpContextAccessor httpContextAccessor)
+        public CornetTransactionController(IConfiguration configuration)
         {
             _configuration = configuration;
-            _logger = Log.Logger;
-            //_httpContextAccessor = httpContextAccessor;
         }
 
-
-        // POST: api/<controller>
         [HttpPost]
         public CornetTransactionRegistrationReply RegisterCornetTransaction(CornetTransaction cornetTransaction)
         {
-            Console.WriteLine(DateTime.UtcNow + " In RegisterCornetTransaction");
             CornetTransactionRegistrationReply cornetregreply = new CornetTransactionRegistrationReply();
             CornetTransactionRegistration.getInstance().Add(cornetTransaction);
-            Console.WriteLine(DateTime.UtcNow + " Received data from Cornet");
+            Log.Information("Received Cornet transaction {EventMessageId}", cornetTransaction.event_message_id);
             try
             {
                 var t = Task.Run(() => CallDynamicsWithCornetData(_configuration, cornetTransaction));
                 t.Wait();
-                Console.WriteLine(DateTime.UtcNow + " Sent data to Dynamics");
 
                 if (t.Result.Contains("Cornet Notification "))
                 {
                     cornetregreply.ResponseCode = "200";
                     cornetregreply.ResponseMessage = "Success";
-                    Console.WriteLine(DateTime.UtcNow + " Response Success");
+                    Log.Information("Cornet transaction {EventMessageId} processed successfully", cornetTransaction.event_message_id);
                 }
                 else
-                {                    
+                {
                     cornetregreply.ResponseMessage = "Failure";
                     cornetregreply.ResponseCode = t.Result;
-                    Console.WriteLine(DateTime.UtcNow + " Response Fail");
-                    //}
+                    Log.Warning("Cornet transaction {EventMessageId} failed with code {ResponseCode}", cornetTransaction.event_message_id, t.Result);
                 }
 
-                // Responses as follows:
-                // 200 - Status OK - Automatically Done
-                // 400 - Bad Request (Malformed JSON) - Automatically Done
-                // 500 - Internal Server Error (Something wrong on our end)
-                // 201 - If anything is being created on our end based on the notification sent
-                // This next line is just a sample of how to do it:
-                //this.HttpContext.Response.StatusCode = 444;
-
-                Console.WriteLine(DateTime.UtcNow + " Exit RegisterCornetTransaction");
                 return cornetregreply;
 
             }
             catch (Exception ex)
             {
-
-                _logger.Error(ex, "Error Registering Cornet Transaction: {EventMessageId}", cornetTransaction.event_message_id);
-                cornetregreply.ResponseCode = "200";
+                Log.Error(ex, "Error Registering Cornet Transaction: {EventMessageId}", cornetTransaction.event_message_id);
+                cornetregreply.ResponseMessage = "Failure";
+                cornetregreply.ResponseCode = "200"; // counterintuitive, but cornet might expect this and not retry if it sees a different code
                 return cornetregreply;
             }
         }
 
         private static async Task<string> CallDynamicsWithCornetData(IConfiguration configuration, CornetTransaction model)
         {
-            Console.WriteLine(DateTime.UtcNow + " In CallDynamicsWithCornetData");
-            HttpClient httpClient = null;
             try
             {
                 var cornetData = model.ToCornetDynamicsModel();
@@ -99,9 +77,7 @@ namespace CASInterfaceService.Pages.Controllers
 
                 // Get results into the tuple
                 var endpointAction = "vsd_CreateCORNETNotifications";
-                Console.WriteLine(DateTime.UtcNow + " Set endpoint " + endpointAction);
                 var tuple = await GetDynamicsHttpClientNew(configuration, cornetJson, endpointAction);
-                Console.WriteLine(DateTime.UtcNow + " Got result from Dynamics");
 
                 string tempResult = tuple.Item1.ToString();
 
@@ -124,25 +100,21 @@ namespace CASInterfaceService.Pages.Controllers
                     dynamicsResponse.odatacontext = dynamicsResponse.Result;
                 }
 
-                Console.WriteLine(DateTime.UtcNow + " Return results from Dynamics");
                 return dynamicsResponse.odatacontext;
-
             }
-            finally
+            catch (Exception ex)
             {
-                if (httpClient != null)
-                    httpClient.Dispose();
+                Log.Error(ex, "Error calling Dynamics for Cornet transaction {EventMessageId}", model.event_message_id);
+                throw;
             }
         }
 
         static async Task<Tuple<int, HttpResponseMessage, string>> GetDynamicsHttpClientNew(IConfiguration configuration, String model, String endPointName)
         {
-            Console.WriteLine(DateTime.UtcNow + " In GetDynamicsHttpClientNew");
             var builder = new ConfigurationBuilder()
                 .AddEnvironmentVariables()
                 .AddUserSecrets<Program>();
             var Configuration = builder.Build();
-            Console.WriteLine(DateTime.UtcNow + " Build Configuration");
 
             // Bind Dynamics configuration
             var dynamicsOptions =
@@ -154,8 +126,6 @@ namespace CASInterfaceService.Pages.Controllers
             {
                 throw new Exception("Configuration setting for DynamicsApiEndpointUrl is blank.");
             }
-
-            Console.WriteLine(DateTime.UtcNow + " Variables have been set");
 
             try
             {
@@ -170,7 +140,7 @@ namespace CASInterfaceService.Pages.Controllers
 
                 // Acquire token
                 string token = await tokenProvider.AcquireToken();
-                Console.WriteLine(DateTime.UtcNow + " Got a token");
+                Log.Debug("Acquired Dynamics token");
 
                 // Call Dynamics
                 using var client = new HttpClient();
@@ -180,29 +150,22 @@ namespace CASInterfaceService.Pages.Controllers
                 client.DefaultRequestHeaders.Add("Accept", "application/json");
 
                 string url = dynamicsOdataUri + endPointName;
-                Console.WriteLine(DateTime.UtcNow + " Set full URL to speak to Dynamics: " + url);
+                Log.Debug("Calling Dynamics endpoint {Url}", url);
 
                 HttpRequestMessage _httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
                 _httpRequest.Content = new StringContent(model, Encoding.UTF8, "application/json");
-                Console.WriteLine(DateTime.UtcNow + " Got HTTP Request ready");
 
                 var _httpResponse = await client.SendAsync(_httpRequest);
                 HttpStatusCode _statusCode = _httpResponse.StatusCode;
 
-                var _responseString = _httpResponse.ToString();
-                Console.WriteLine(DateTime.UtcNow + " Got HTTP Response");
                 var _responseContent = await _httpResponse.Content.ReadAsStringAsync();
+                Log.Debug("Dynamics response {StatusCode}: {ResponseContent}", (int)_statusCode, _responseContent);
 
-                Console.Out.WriteLine(DateTime.UtcNow + " model: " + model);
-                Console.Out.WriteLine(DateTime.UtcNow + " responseString: " + _responseString);
-                Console.Out.WriteLine(DateTime.UtcNow + " responseContent: " + _responseContent);
-
-                Console.WriteLine(DateTime.UtcNow + " Exit GetDynamicsHttpClientNew");
                 return new Tuple<int, HttpResponseMessage, string>((int)_statusCode, _httpResponse, _responseContent);
             }
             catch (Exception e)
             {
-                Console.WriteLine(DateTime.UtcNow + " Error in GetDynamicsHttpClientNew: " + e.Message);
+                Log.Error(e, "Error calling Dynamics endpoint {EndpointName}", endPointName);
                 return new Tuple<int, HttpResponseMessage, string>(100, null, "Error: " + e.Message);
             }
         }
@@ -212,7 +175,6 @@ namespace CASInterfaceService.Pages.Controllers
         {
             try
             {
-                Console.WriteLine(DateTime.UtcNow + " In InsertCornetTransaction");
                 CornetTransactionRegistrationReply casregreply = new CornetTransactionRegistrationReply();
                 CornetTransactionRegistration.getInstance().Add(cornetTransaction);
                 casregreply.ResponseMessage = "Success";
@@ -221,7 +183,7 @@ namespace CASInterfaceService.Pages.Controllers
             }
             catch (Exception e)
             {
-                Console.WriteLine(DateTime.UtcNow + " Error in InsertCornetTransaction. " + e.ToString());
+                Log.Error(e, "Error in InsertCornetTransaction");
                 return StatusCode(e.HResult);
             }
 
