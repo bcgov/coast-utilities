@@ -29,8 +29,7 @@ namespace CASInterfaceService.Pages.Controllers
             _configuration = configuration;
         }
 
-        [HttpPost]
-        [AllowAnonymous]
+        [HttpPost]        
         public CornetTransactionRegistrationReply RegisterCornetTransaction(CornetTransaction cornetTransaction)
         {
             CornetTransactionRegistrationReply cornetregreply = new CornetTransactionRegistrationReply();
@@ -172,7 +171,6 @@ namespace CASInterfaceService.Pages.Controllers
         }
 
         [HttpPost("InsertCornetTransaction")]
-        [AllowAnonymous]
         public IActionResult InsertCornetTransaction(CornetTransaction cornetTransaction)
         {
             try
