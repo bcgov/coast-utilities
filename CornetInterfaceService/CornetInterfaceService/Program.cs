@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using CornetInterfaceService.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -46,6 +47,10 @@ try
 
     builder.Services.AddHealthChecks();
 
+    // ========================================
+    // OAUTH 2 / JWT BEARER AUTHENTICATION (COMMENTED OUT)
+    // ========================================
+    /*
     builder.Services
         .AddAuthentication(options =>
         {
@@ -119,6 +124,23 @@ try
             }
         );
         options.DefaultPolicy = options.GetPolicy(JwtBearerDefaults.AuthenticationScheme) ?? null!;
+    });
+    */
+
+    // ========================================
+    // BASIC AUTHENTICATION (NEW)
+    // ========================================
+    builder.Services.AddAuthentication("BasicAuthentication")
+        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BasicAuthenticationHandler>(
+            "BasicAuthentication", null);
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy("BasicAuthPolicy", policy =>
+        {
+            policy.AddAuthenticationSchemes("BasicAuthentication");
+            policy.RequireAuthenticatedUser();
+        });
     });
 
     builder.Services.AddSerilog();
