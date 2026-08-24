@@ -63,8 +63,8 @@ public class BasicAuthenticationHandler : AuthenticationHandler<AuthenticationSc
             var password = credentials[1];
 
             // Validate credentials against configuration
-            var configuredUsername = _configuration["BasicAuth:Username"];
-            var configuredPassword = _configuration["BasicAuth:Password"];
+            var configuredUsername = _configuration["BASIC_AUTH_USERNAME"];
+            var configuredPassword = _configuration["BASIC_AUTH_PASSWORD"];
 
             if (string.IsNullOrEmpty(configuredUsername) || string.IsNullOrEmpty(configuredPassword))
             {
