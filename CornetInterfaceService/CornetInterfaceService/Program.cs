@@ -128,7 +128,7 @@ try
     */
 
     // ========================================
-    // BASIC AUTHENTICATION (NEW)
+    // BASIC AUTHENTICATION
     // ========================================
     builder.Services.AddAuthentication("BasicAuthentication")
         .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BasicAuthenticationHandler>(
