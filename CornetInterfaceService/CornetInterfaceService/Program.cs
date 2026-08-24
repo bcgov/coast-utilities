@@ -47,14 +47,13 @@ try
 
     builder.Services.AddHealthChecks();
 
-    // ========================================
-    // OAUTH 2 / JWT BEARER AUTHENTICATION (COMMENTED OUT)
-    // ========================================
-    /*
+    // Configure Basic and OAuth 2 authentication schemes
     builder.Services
         .AddAuthentication(options =>
         {
-            options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+            // Default scheme for controllers with [Authorize]
+            options.DefaultScheme = "BasicAuthentication";
+            options.DefaultChallengeScheme = "BasicAuthentication";
         })
         .AddJwtBearer(
             JwtBearerDefaults.AuthenticationScheme,
@@ -110,12 +109,19 @@ try
 
                 options.Validate();
             }
-        );
+        )
+        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BasicAuthenticationHandler>(
+            "BasicAuthentication", null);
 
     builder.Services.AddAuthorization(options =>
     {
+        options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .AddAuthenticationSchemes("BasicAuthentication")
+            .RequireAuthenticatedUser()
+            .Build();
+
         options.AddPolicy(
-            JwtBearerDefaults.AuthenticationScheme,
+            "JwtBearerPolicy",
             policy =>
             {
                 policy
@@ -123,24 +129,6 @@ try
                     .RequireAuthenticatedUser();
             }
         );
-        options.DefaultPolicy = options.GetPolicy(JwtBearerDefaults.AuthenticationScheme) ?? null!;
-    });
-    */
-
-    // ========================================
-    // BASIC AUTHENTICATION
-    // ========================================
-    builder.Services.AddAuthentication("BasicAuthentication")
-        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, BasicAuthenticationHandler>(
-            "BasicAuthentication", null);
-
-    builder.Services.AddAuthorization(options =>
-    {
-        options.AddPolicy("BasicAuthPolicy", policy =>
-        {
-            policy.AddAuthenticationSchemes("BasicAuthentication");
-            policy.RequireAuthenticatedUser();
-        });
     });
 
     builder.Services.AddSerilog();
@@ -152,6 +140,15 @@ try
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options =>
         {
+            // Support both Basic and Bearer authentication in Swagger
+            options.AddSecurityDefinition("Basic", new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "basic",
+                In = ParameterLocation.Header,
+                Description = "Basic Authentication for controller endpoints.",
+            });
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
@@ -166,7 +163,7 @@ try
                 [
                     new OpenApiSecurityScheme
                     {
-                        Reference = new OpenApiReference { Id = "Bearer", Type = ReferenceType.SecurityScheme },
+                        Reference = new OpenApiReference { Id = "Basic", Type = ReferenceType.SecurityScheme },
                     }
                 ] = [],
             });
