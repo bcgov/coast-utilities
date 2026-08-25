@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -12,26 +13,94 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using Serilog.Enrichers.Span;
 using Serilog.Events;
+using Serilog.Exceptions;
 
-// Bootstrap Serilog before the host builds so startup errors are captured
-var bootstrapConfig = new ConfigurationBuilder()
-    .AddEnvironmentVariables()
-    .AddUserSecrets<Program>()
-    .Build();
+// Enable Serilog self-diagnostics before any logger is created so sink errors are visible.
+Serilog.Debugging.SelfLog.Enable(msg => Console.Error.WriteLine($"[Serilog SelfLog] {msg}"));
 
-var loggerConfig = new LoggerConfiguration()
-    .MinimumLevel.Debug()
-    .Enrich.WithProperty("ServiceName", "aem-api")
-    .Enrich.WithProperty("ServiceType", "coast-utilities")
-    .WriteTo.Console();
-
-ConfigureSplunk(loggerConfig, bootstrapConfig);
+// Bootstrap logger captures startup errors before the full Serilog pipeline is ready.
+Log.Logger = new LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateBootstrapLogger();
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
     builder.WebHost.UseUrls("http://*:8080");
+
+    // ── Serilog ───────────────────────────────────────────────────────────────
+    builder.Host.UseSerilog(
+        (ctx, _, loggerConfiguration) =>
+        {
+            var hostEnv = ctx.HostingEnvironment;
+            var config = ctx.Configuration;
+
+            loggerConfiguration
+                .Enrich.FromLogContext()
+                .Enrich.WithExceptionDetails()
+                .Enrich.WithMachineName()
+                .Enrich.WithProperty("ServiceName", "aem-api")
+                .Enrich.WithProperty("ServiceType", "coast-utilities")
+                .Enrich.WithProperty("environment", hostEnv.EnvironmentName)
+                .Enrich.WithEnvironmentUserName()
+                .Enrich.WithCorrelationId()
+                .Enrich.WithSpan()
+                .Enrich.WithProperty(
+                    "version",
+                    Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown"
+                )
+                .Enrich.WithProperty("UTC_Timestamp", DateTime.UtcNow.ToString("o"));
+
+            if (hostEnv.IsDevelopment())
+                loggerConfiguration.MinimumLevel.Debug();
+            else
+                loggerConfiguration.MinimumLevel.Information();
+
+            loggerConfiguration
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                // Keep the built-in "Now listening on..."/"Application started..." messages visible
+                // despite the blanket Microsoft -> Warning override above.
+                .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+                .MinimumLevel.Override("System", LogEventLevel.Warning);
+
+            loggerConfiguration.WriteTo.Console();
+
+            var splunkCollectorUrl = config["SPLUNK_COLLECTOR_URL"];
+            var splunkToken = config["SPLUNK_TOKEN"];
+
+            if (!string.IsNullOrEmpty(splunkCollectorUrl) && !string.IsNullOrEmpty(splunkToken))
+            {
+                Console.WriteLine($"[Serilog] Splunk sink enabled: {splunkCollectorUrl}");
+
+                HttpClientHandler? handler = null;
+
+                if (hostEnv.IsDevelopment())
+                {
+                    handler = new HttpClientHandler
+                    {
+                        ServerCertificateCustomValidationCallback =
+                            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+                    };
+                }
+
+                loggerConfiguration.WriteTo.EventCollector(
+                    splunkHost: splunkCollectorUrl,
+                    eventCollectorToken: splunkToken,
+                    source: "aem-api",
+                    sourceType: "coast:aem-api",
+                    host: Environment.MachineName,
+                    restrictedToMinimumLevel: LogEventLevel.Information,
+                    messageHandler: handler,
+                    batchSizeLimit: 100,
+                    batchIntervalInSeconds: 2
+                );
+            }
+            else
+            {
+                Console.WriteLine("[Serilog] Splunk sink NOT configured");
+            }
+        }
+    );
 
     // Configure JWT Authentication
     builder.Services
@@ -63,28 +132,30 @@ try
 
             options.Events = new JwtBearerEvents
             {
-                OnMessageReceived = async ctx =>
+                OnMessageReceived = ctx =>
                 {
-                    await Task.CompletedTask;
+                    // Debug-only: fires on every request (including /hc probes), so it must stay
+                    // below the Production minimum level to avoid flooding logs.
                     var hasAuthHeader = !string.IsNullOrWhiteSpace(ctx.Request.Headers["Authorization"]);
-                    Console.WriteLine($"JWT - Message received. HasAuthorizationHeader: {hasAuthHeader}");
+                    Log.Debug("JWT - Message received. HasAuthorizationHeader: {HasAuthorizationHeader}", hasAuthHeader);
+                    return Task.CompletedTask;
                 },
-                OnTokenValidated = async ctx =>
+                OnTokenValidated = ctx =>
                 {
-                    await Task.CompletedTask;
                     var userId = ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
                               ?? ctx.Principal?.FindFirst("sub")?.Value;
-                    Console.WriteLine($"JWT - Token validated. UserId: {userId}");
+                    Log.Information("JWT - Token validated. UserId: {UserId}", userId);
+                    return Task.CompletedTask;
                 },
-                OnAuthenticationFailed = async ctx =>
+                OnAuthenticationFailed = ctx =>
                 {
-                    await Task.CompletedTask;
-                    Console.WriteLine("JWT - Authentication failed.");
+                    Log.Warning(ctx.Exception, "JWT - Authentication failed.");
+                    return Task.CompletedTask;
                 },
-                OnChallenge = async ctx =>
+                OnChallenge = ctx =>
                 {
-                    await Task.CompletedTask;
-                    Console.WriteLine($"JWT - Challenge. Error: {ctx.Error}; Description: {ctx.ErrorDescription}");
+                    Log.Warning("JWT - Challenge. Error: {Error}; Description: {ErrorDescription}", ctx.Error, ctx.ErrorDescription);
+                    return Task.CompletedTask;
                 },
             };
 
@@ -92,7 +163,6 @@ try
         });
 
     builder.Services.AddHealthChecks();
-    builder.Services.AddSerilog();
     builder.Services.AddControllers();
 
     if (builder.Environment.IsDevelopment())
@@ -167,45 +237,29 @@ try
         };
     });
 
+    // Placed before UseAuthentication/UseAuthorization so /hc probes are handled here
+    // and never reach the JWT authentication middleware at all.
+    app.UseHealthChecks("/hc");
+
     app.UseHttpsRedirection();
     app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();
-    app.MapHealthChecks("/hc").AllowAnonymous();
     app.MapControllers();
+
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        Log.Information(
+            "aem-api started successfully. Environment={Environment}, Version={Version}, Urls={Urls}",
+            app.Environment.EnvironmentName,
+            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown",
+            string.Join(", ", app.Urls)
+        );
+    });
 
     app.Run();
 }
 finally
 {
     Log.CloseAndFlush();
-}
-
-static void ConfigureSplunk(LoggerConfiguration loggerConfig, IConfiguration config)
-{
-    string splunkUrl = config["SPLUNK_COLLECTOR_URL"];
-    string splunkToken = config["SPLUNK_TOKEN"];
-    bool isDevelopment = (config["ASPNETCORE_ENVIRONMENT"] ?? "Production")
-        .Equals("Development", StringComparison.OrdinalIgnoreCase);
-
-    if (!isDevelopment && !string.IsNullOrEmpty(splunkUrl) && !string.IsNullOrEmpty(splunkToken))
-    {
-        loggerConfig.WriteTo.EventCollector(
-            splunkHost: splunkUrl,
-            eventCollectorToken: splunkToken,
-            restrictedToMinimumLevel: LogEventLevel.Information,
-            source: "aem-api",
-            sourceType: "coast:aem-api",
-            host: Environment.MachineName);
-
-        Log.Logger = loggerConfig.CreateLogger();
-        Log.Information(
-            "Serilog configured with Splunk sink at {SplunkUrl} (source: aem-api, sourceType: coast:aem-api)",
-            splunkUrl);
-    }
-    else
-    {
-        Log.Logger = loggerConfig.CreateLogger();
-        Log.Information("Serilog configured with Console sink only (Splunk not configured)");
-    }
 }
