@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using CornetInterfaceService.Authentication;
+using CornetInterfaceService.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -196,6 +197,20 @@ try
         });
 
     var app = builder.Build();
+    app.UseMiddleware<IpAddressLoggingMiddleware>();
+
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+        {
+            var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+            if (ipAddress == "::1") ipAddress = "localhost-ipv6";
+
+            diagnosticContext.Set("ClientIP", ipAddress);
+            diagnosticContext.Set("RequestPath", httpContext.Request.Path);
+            diagnosticContext.Set("UserAgent", httpContext.Request.Headers["User-Agent"].ToString());
+        };
+    });
 
     app.UseExceptionHandler(appBuilder =>
     {
@@ -267,9 +282,12 @@ finally
 static void ConfigureSerilog(IConfiguration config)
 {
     var loggerConfig = new LoggerConfiguration()
+        .ReadFrom.Configuration(config)
         .Enrich.FromLogContext()
         .Enrich.WithExceptionDetails()
-        .WriteTo.Console();
+        .WriteTo.Console(
+            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ClientIP}] {Message:lj}{NewLine}{Exception}"
+        );
 
     var isDevelopment = (config["ASPNETCORE_ENVIRONMENT"] ?? "Production")
         .Equals("Development", StringComparison.OrdinalIgnoreCase);
