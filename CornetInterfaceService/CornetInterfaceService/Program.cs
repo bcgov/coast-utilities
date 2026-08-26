@@ -207,8 +207,6 @@ try
             if (ipAddress == "::1") ipAddress = "localhost-ipv6";
 
             diagnosticContext.Set("ClientIP", ipAddress);
-            diagnosticContext.Set("RequestPath", httpContext.Request.Path);
-            diagnosticContext.Set("UserAgent", httpContext.Request.Headers["User-Agent"].ToString());
         };
     });
 
