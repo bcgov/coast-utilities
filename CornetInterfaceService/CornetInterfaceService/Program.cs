@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using CornetInterfaceService.Authentication;
+using CornetInterfaceService.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -55,7 +56,10 @@ try
                     "version",
                     Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown"
                 )
-                .Enrich.WithProperty("UTC_Timestamp", DateTime.UtcNow.ToString("o"));
+                .Enrich.WithProperty("UTC_Timestamp", DateTime.UtcNow.ToString("o"))
+                .WriteTo.Console(
+            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ClientIP}] {Message:lj}{NewLine}{Exception}"
+        );
 
             if (hostEnv.IsDevelopment())
                 loggerConfiguration.MinimumLevel.Debug();
@@ -272,6 +276,18 @@ try
         });
 
     var app = builder.Build();
+    app.UseMiddleware<IpAddressLoggingMiddleware>();
+
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+        {
+            var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+            if (ipAddress == "::1") ipAddress = "localhost-ipv6";
+
+            diagnosticContext.Set("ClientIP", ipAddress);
+        };
+    });
 
     app.UseExceptionHandler(appBuilder =>
     {

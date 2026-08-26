@@ -37,6 +37,12 @@ public class BasicAuthenticationHandler : AuthenticationHandler<AuthenticationSc
             return AuthenticateResult.NoResult();
         }
 
+        // Skip authentication for reverse proxy routes - let JWT Bearer handle them
+        if (Request.Path.StartsWithSegments("/CorVSUDynAPI"))
+        {
+            return AuthenticateResult.NoResult();
+        }
+
         if (!Request.Headers.ContainsKey("Authorization"))
         {
             return AuthenticateResult.Fail("Missing Authorization Header");
@@ -83,7 +89,6 @@ public class BasicAuthenticationHandler : AuthenticationHandler<AuthenticationSc
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
-                Logger.LogInformation("Basic authentication successful for user: {Username}", username);
                 return AuthenticateResult.Success(ticket);
             }
 

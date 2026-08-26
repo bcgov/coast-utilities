@@ -34,7 +34,6 @@ namespace CASInterfaceService.Pages.Controllers
         {
             CornetTransactionRegistrationReply cornetregreply = new CornetTransactionRegistrationReply();
             CornetTransactionRegistration.getInstance().Add(cornetTransaction);
-            Log.Information("Received Cornet transaction {EventMessageId}", cornetTransaction.event_message_id);
             try
             {
                 var t = Task.Run(() => CallDynamicsWithCornetData(_configuration, cornetTransaction));
@@ -44,7 +43,6 @@ namespace CASInterfaceService.Pages.Controllers
                 {
                     cornetregreply.ResponseCode = "200";
                     cornetregreply.ResponseMessage = "Success";
-                    Log.Information("Cornet transaction {EventMessageId} processed successfully", cornetTransaction.event_message_id);
                 }
                 else
                 {
