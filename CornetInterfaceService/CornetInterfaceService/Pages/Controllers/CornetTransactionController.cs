@@ -56,6 +56,7 @@ namespace CASInterfaceService.Pages.Controllers
             }
             catch (Exception ex)
             {
+                Log.Error(ex, "Error Registering Cornet Transaction: {EventMessageId}", cornetTransaction.event_message_id);
                 cornetregreply.ResponseMessage = "Failure";
                 cornetregreply.ResponseCode = "200"; // counterintuitive, but cornet might expect this and not retry if it sees a different code
                 return cornetregreply;
