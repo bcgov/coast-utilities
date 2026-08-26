@@ -142,6 +142,7 @@ namespace CASInterfaceService.Pages.Controllers
 
                 // Call Dynamics
                 using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(120); 
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                 client.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
                 client.DefaultRequestHeaders.Add("OData-Version", "4.0");
