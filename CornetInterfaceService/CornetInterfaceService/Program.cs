@@ -58,8 +58,8 @@ try
                 )
                 .Enrich.WithProperty("UTC_Timestamp", DateTime.UtcNow.ToString("o"))
                 .WriteTo.Console(
-            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ClientIP}] {Message:lj}{NewLine}{Exception}"
-        );
+                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ClientIP}] {Message:lj}{NewLine}{Exception}"
+                );
 
             if (hostEnv.IsDevelopment())
                 loggerConfiguration.MinimumLevel.Debug();
@@ -72,8 +72,6 @@ try
                 // despite the blanket Microsoft -> Warning override above.
                 .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
                 .MinimumLevel.Override("System", LogEventLevel.Warning);
-
-            loggerConfiguration.WriteTo.Console();
 
             var splunkCollectorUrl = config["SPLUNK_COLLECTOR_URL"];
             var splunkToken = config["SPLUNK_TOKEN"];
