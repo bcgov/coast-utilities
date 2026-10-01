@@ -32,7 +32,7 @@ jobs:
 
     # [5] install oc -> login -> PASS 1 resolve ALL digests -> PASS 2 backup + re-point -> VERIFY
     steps:
-      - uses: redhat-actions/openshift-tools-installer@v1   # third-party — pin to commit SHA when hardening
+      - uses: redhat-actions/openshift-tools-installer@v3   # third-party — pin to commit SHA when hardening
         with:
           oc: "4"
       - run: oc login --token=${{ secrets.OCP4_PASSWORD }} --server=${{ secrets.OPENSHIFT_SERVER }}
