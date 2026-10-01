@@ -2,13 +2,13 @@ ARG BUILD_ID
 ARG BUILD_VERSION
 
 # Retrieve and set base image layer
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine@sha256:27b6b84beeede74fd16886177d360799c8e4299ceadfbd64eef57bafead7878a AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine@sha256:f62a272ac1b46e83f56b8ed0416572f31cd1128e2c4a5e63eb34d348e4a36095 AS base
 ARG BUILD_ID
 ARG BUILD_VERSION
 WORKDIR /app
 
 # Create build image for runtime
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29 AS build
 COPY . .
 
 # Restore as distinct layers
