@@ -80,7 +80,7 @@ try
             {
                 Console.WriteLine($"[Serilog] Splunk sink enabled: {splunkCollectorUrl}");
 
-                HttpClientHandler? handler = null;
+                HttpClientHandler handler = null;
 
                 if (hostEnv.IsDevelopment())
                 {
