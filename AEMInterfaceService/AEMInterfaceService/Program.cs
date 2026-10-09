@@ -221,9 +221,6 @@ try
     {
         options.GetLevel = (httpContext, elapsed, ex) =>
         {
-            if (ex != null)
-                return LogEventLevel.Error;
-
             var path = httpContext.Request.Path.ToString();
 
             if (path.StartsWith("/hc", StringComparison.OrdinalIgnoreCase))
@@ -231,8 +228,8 @@ try
                     ? LogEventLevel.Error
                     : LogEventLevel.Verbose;
 
-            return httpContext.Response.StatusCode >= 400
-                ? LogEventLevel.Warning
+            return ex != null || httpContext.Response.StatusCode >= 400
+                ? LogEventLevel.Error
                 : LogEventLevel.Information;
         };
     });
