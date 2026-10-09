@@ -135,7 +135,7 @@ try
                 },
                 OnAuthenticationFailed = context =>
                 {
-                    Log.Warning("JWT authentication failed: {Error}", context.Exception.Message);
+                    Log.Error("JWT authentication failed: {Error}", context.Exception.Message);
                     return Task.CompletedTask;
                 }
             };

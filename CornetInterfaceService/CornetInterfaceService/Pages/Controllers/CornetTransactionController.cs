@@ -48,7 +48,7 @@ namespace CASInterfaceService.Pages.Controllers
                 {
                     cornetregreply.ResponseMessage = "Failure";
                     cornetregreply.ResponseCode = t.Result;
-                    Log.Warning("Cornet transaction {EventMessageId} failed with code {ResponseCode}", cornetTransaction.event_message_id, t.Result);
+                    Log.Error("Cornet transaction {EventMessageId} failed with code {ResponseCode}", cornetTransaction.event_message_id, t.Result);
                 }
 
                 return cornetregreply;

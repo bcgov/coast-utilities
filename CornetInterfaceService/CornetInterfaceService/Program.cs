@@ -80,7 +80,7 @@ try
             {
                 Console.WriteLine($"[Serilog] Splunk sink enabled: {splunkCollectorUrl}");
 
-                HttpClientHandler? handler = null;
+                HttpClientHandler handler = null;
 
                 if (hostEnv.IsDevelopment())
                 {
@@ -173,12 +173,12 @@ try
                     },
                     OnAuthenticationFailed = ctx =>
                     {
-                        Log.Warning(ctx.Exception, "JWT - Authentication failed.");
+                        Log.Error(ctx.Exception, "JWT - Authentication failed.");
                         return Task.CompletedTask;
                     },
                     OnChallenge = ctx =>
                     {
-                        Log.Warning(
+                        Log.Error(
                             "JWT - Challenge. Error: {Error}; Description: {ErrorDescription}",
                             ctx.Error,
                             ctx.ErrorDescription
