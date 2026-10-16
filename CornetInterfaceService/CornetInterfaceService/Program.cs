@@ -21,6 +21,7 @@ using Serilog;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Exceptions;
+using Shared.Database;
 using Yarp.ReverseProxy.Model;
 using Yarp.ReverseProxy.Transforms;
 
@@ -76,7 +77,11 @@ try
             var splunkCollectorUrl = config["SPLUNK_COLLECTOR_URL"];
             var splunkToken = config["SPLUNK_TOKEN"];
 
-            if (!string.IsNullOrEmpty(splunkCollectorUrl) && !string.IsNullOrEmpty(splunkToken))
+            // Never attempt to reach the real Splunk collector when running locally, even if
+            // SPLUNK_COLLECTOR_URL/TOKEN happen to be set (e.g. inherited from real environment
+            // secrets) - the collector isn't reachable from a dev machine and the Serilog batching
+            // sink will otherwise keep retrying and logging connection-failure noise every few seconds.
+            if (!hostEnv.IsDevelopment() && !string.IsNullOrEmpty(splunkCollectorUrl) && !string.IsNullOrEmpty(splunkToken))
             {
                 Console.WriteLine($"[Serilog] Splunk sink enabled: {splunkCollectorUrl}");
 
@@ -122,6 +127,20 @@ try
     });
 
     builder.Services.AddHealthChecks();
+    
+    builder.Services.AddDynamicsTokenProvider();
+
+    // Owns CORNET → Dynamics payload mapping, token use, the outbound call, and response parsing,
+    builder.Services.AddHttpClient<
+        CornetInterfaceService.Pages.Services.IDynamicsCornetNotificationClient,
+        CornetInterfaceService.Pages.Services.DynamicsCornetNotificationClient
+    >(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(120);
+        client.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
+        client.DefaultRequestHeaders.Add("OData-Version", "4.0");
+        client.DefaultRequestHeaders.Add("Accept", "application/json");
+    });
 
     // Configure Basic and OAuth 2 authentication schemes
     builder.Services

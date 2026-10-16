@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace CASInterfaceService.Pages.Models.Extensions
+namespace CornetInterfaceService.Pages.Models.Extensions
 {
     public static class CornetModelExtensions
     {

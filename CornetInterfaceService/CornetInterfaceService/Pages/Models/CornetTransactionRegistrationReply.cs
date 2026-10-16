@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace CASInterfaceService.Pages.Models
+namespace CornetInterfaceService.Pages.Models
 {
     public class CornetTransactionRegistrationReply
     {
