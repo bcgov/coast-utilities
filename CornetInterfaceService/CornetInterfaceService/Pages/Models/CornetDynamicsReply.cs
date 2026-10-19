@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace CASInterfaceService.Pages.Models
+namespace CornetInterfaceService.Pages.Models
 {
     public class CornetDynamicsReply
     {

@@ -1,2 +1,2 @@
-DOTNET_STARTUP_PROJECT=CASInterfaceService/cornet-interface-service.csproj
+DOTNET_STARTUP_PROJECT=CornetInterfaceService/cornet-interface-service.csproj
 

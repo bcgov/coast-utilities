@@ -15,7 +15,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "CASInterfaceService": {
+    "CornetInterfaceService": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
