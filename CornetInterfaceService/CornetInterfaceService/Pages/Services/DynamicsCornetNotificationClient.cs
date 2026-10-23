@@ -80,14 +80,13 @@ namespace CornetInterfaceService.Pages.Services
 
                 DynamicsResponse dynamicsResponse = new DynamicsResponse
                 {
-                    IsSuccess = deserializeJson.IsSuccess,
-                    Result = deserializeJson.Result,
+                    IsSuccess = deserializeJson?.IsSuccess ?? false,
+                    Result = deserializeJson?.Result,
                 };
 
                 dynamicsResponse.odatacontext = dynamicsResponse.Result ?? tempJson;
 
-                var isSuccess = dynamicsResponse.odatacontext.Contains("Cornet Notification ");
-                return new CornetNotificationResult(isSuccess, dynamicsResponse.odatacontext);
+                return new CornetNotificationResult(dynamicsResponse.IsSuccess, dynamicsResponse.odatacontext);
             }
             catch (Exception ex)
             {
