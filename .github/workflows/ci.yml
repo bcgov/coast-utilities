@@ -28,10 +28,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { image: aem-interface-service, dockerfile: AEMInterfaceService/AEMInterfaceService/Dockerfile, context: ., watch: '{AEMInterfaceService,Shared.Database}/**' }
-          - { image: cas-interface-service, dockerfile: CASInterfaceService/CASInterfaceService/Dockerfile, context: ., watch: '{CASInterfaceService,Shared.Database}/**' }
-          - { image: cornet-interface-service, dockerfile: CornetInterfaceService/Dockerfile, context: ., watch: '{CornetInterfaceService,Shared.Database}/**' }
-          - { image: job-scheduling, dockerfile: job-scheduling/job-scheduling/openshift/Dockerfile, context: ., watch: '{job-scheduling,Shared.Database}/**' }
+          - { image: aem-interface-service, dockerfile: AEMInterfaceService/AEMInterfaceService/Dockerfile, context: ., watch: '{AEMInterfaceService,Shared.Database}/**', args: '--build-arg BUILD_ID=$GITHUB_SERVER_URL!$GITHUB_REPOSITORY!$GITHUB_REF_NAME!$GITHUB_SHA!$GITHUB_RUN_NUMBER --build-arg BUILD_VERSION=$GITHUB_SHA' }
+          - { image: cas-interface-service, dockerfile: CASInterfaceService/CASInterfaceService/Dockerfile, context: ., watch: '{CASInterfaceService,Shared.Database}/**', args: '--build-arg BUILD_ID=$GITHUB_SERVER_URL!$GITHUB_REPOSITORY!$GITHUB_REF_NAME!$GITHUB_SHA!$GITHUB_RUN_NUMBER --build-arg BUILD_VERSION=$GITHUB_SHA' }
+          - { image: cornet-interface-service, dockerfile: CornetInterfaceService/Dockerfile, context: ., watch: '{CornetInterfaceService,Shared.Database}/**', args: '--build-arg BUILD_ID=$GITHUB_SERVER_URL!$GITHUB_REPOSITORY!$GITHUB_REF_NAME!$GITHUB_SHA!$GITHUB_RUN_NUMBER --build-arg BUILD_VERSION=$GITHUB_SHA' }
+          - { image: job-scheduling, dockerfile: job-scheduling/job-scheduling/openshift/Dockerfile, context: ., watch: '{job-scheduling,Shared.Database}/**', args: '--build-arg BUILD_ID=$GITHUB_SERVER_URL!$GITHUB_REPOSITORY!$GITHUB_REF_NAME!$GITHUB_SHA!$GITHUB_RUN_NUMBER --build-arg BUILD_VERSION=$GITHUB_SHA' }
     name: ${{ matrix.image }}
     steps:
       # Get the code.
@@ -50,7 +50,7 @@ jobs:
       # Build the image, the same way cd builds it.
       - name: docker build
         if: steps.changed.outputs.yes == 'true'
-        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.image }}:ci ${{ matrix.context }}
+        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.image }}:ci ${{ matrix.args }} ${{ matrix.context }}
       # Scan the image. It reports what it finds and never stops the pull request.
       # From a fork, the findings are a table on the run's Summary only: a fork's token cannot write to the Security tab.
       - name: Trivy
