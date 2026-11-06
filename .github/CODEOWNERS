@@ -1,0 +1,11 @@
+# Who GitHub asks to review a change. The last matching line wins.
+# The Technical Lead is asked for every change. For the pipeline files and the Dockerfiles, DevOps is asked
+# as well. It only asks: any person with write access, other than the author, can approve.
+*                                                    @GeorgeWalker
+/.github/workflows/                                  @GeorgeWalker @rohithvarmayadla
+/.github/dependabot.yml                              @GeorgeWalker @rohithvarmayadla
+/.github/CODEOWNERS                                  @GeorgeWalker @rohithvarmayadla
+/AEMInterfaceService/AEMInterfaceService/Dockerfile  @GeorgeWalker @rohithvarmayadla
+/CASInterfaceService/CASInterfaceService/Dockerfile  @GeorgeWalker @rohithvarmayadla
+/CornetInterfaceService/Dockerfile                   @GeorgeWalker @rohithvarmayadla
+/job-scheduling/job-scheduling/openshift/Dockerfile  @GeorgeWalker @rohithvarmayadla

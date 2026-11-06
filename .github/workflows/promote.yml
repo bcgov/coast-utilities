@@ -1,0 +1,176 @@
+# Moves a build from one tag to the next, by hand, then waits until it runs and is ready. test takes
+# what dev has, or one exact build you name. prod takes what test has, now or at a set time. What was there
+# before is kept as the backup.
+name: promote
+# The title of the run in the Actions list.
+run-name: ${{ inputs.action }} ${{ inputs.service }} → ${{ inputs.to }} ${{ inputs.build }}${{ inputs.at != '' && format(' at {0} Pacific', inputs.at) || '' }}
+
+# When it runs: only by hand, with these five choices.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: promote moves a build forward; rollback puts the previous one back
+        type: choice
+        options: [promote, rollback]
+      to:
+        description: the tag that changes
+        type: choice
+        options: [test, prod]
+      service:
+        description: one image, or all of them
+        type: choice
+        options: [all, aem-interface-service, cas-interface-service, cornet-interface-service, job-scheduling]
+      build:
+        description: promote to test only - one exact build, like sha-a1b2c3d. Empty means what dev has
+        default: ''
+      at:
+        description: promote to prod only - the time to promote at, Pacific, like 2026-11-04 19:00. Empty means now
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # A promote at a set time is checked first, so no reviewer is asked to approve a time that cannot work.
+  time:
+    if: inputs.at != ''
+    runs-on: ubuntu-24.04
+    steps:
+      # A time is for a promote to prod only. It is refused when it has passed, or is more than 30 days ahead:
+      # GitHub's wait timer holds 1 to 43,200 minutes.
+      - name: check the time
+        env:
+          AT: ${{ inputs.at }}
+          ACTION: ${{ inputs.action }}
+          TO: ${{ inputs.to }}
+        run: |
+          [ "$ACTION" = promote ] && [ "$TO" = prod ] || { echo "::error::A time is for a promote to prod only."; exit 1; }
+          [[ "$AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ ]] && date -d "$AT" > /dev/null || { echo "::error::Write the time like 2026-11-04 19:00."; exit 1; }
+          MIN=$(( ($(TZ=America/Vancouver date -d "$AT" +%s) - $(date +%s) + 59) / 60 ))
+          [ "$MIN" -ge 1 ] && [ "$MIN" -le 43200 ] || { echo "::error::$AT Pacific has passed, or is more than 30 days ahead."; exit 1; }
+
+  # A promote at a set time: one of prod's reviewers approves it now. Then prod-at's timer is set to the minutes
+  # left, and the promote below waits on it.
+  timer:
+    needs: time
+    runs-on: ubuntu-24.04
+    # The prod environment waits for one of its reviewers, and holds RELEASE_TIMER_TOKEN.
+    environment: prod
+    # What it may do: see which promote runs are waiting, and open an issue.
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      # Count the minutes left, now that it is approved. A time that passed while it waited is refused.
+      - name: minutes left
+        id: left
+        env:
+          AT: ${{ inputs.at }}
+        run: |
+          MIN=$(( ($(TZ=America/Vancouver date -d "$AT" +%s) - $(date +%s) + 59) / 60 ))
+          [ "$MIN" -ge 1 ] && [ "$MIN" -le 43200 ] || { echo "::error::$AT Pacific has passed, or is more than 30 days ahead."; exit 1; }
+          echo "minutes=$MIN" >> "$GITHUB_OUTPUT"
+      # One timed release at a time: the timer is one setting on prod-at, so another timed promote that waits stops this one.
+      - name: one at a time
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          WAITING=$(gh run list -R "$GITHUB_REPOSITORY" -w promote.yml -s waiting --json displayTitle --jq '.[].displayTitle | select(endswith(" Pacific"))')
+          [ -z "$WAITING" ] || { echo "::error::Another timed release waits: $WAITING. Cancel it, or wait until it has run."; exit 1; }
+      # Set prod-at's timer to those minutes, with the one token here that may change the repo's environments.
+      # The other settings stay: no admin can skip the timer, and only the default branch may use prod-at.
+      - name: set the timer
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TIMER_TOKEN }}
+          MIN: ${{ steps.left.outputs.minutes }}
+        run: |
+          jq -n --argjson m "$MIN" '{wait_timer: $m, can_admins_bypass: false, deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}}' \
+            | gh api -X PUT "repos/$GITHUB_REPOSITORY/environments/prod-at" --input - > /dev/null
+          echo "Approved. The promote waits on prod-at for $MIN minutes." >> "$GITHUB_STEP_SUMMARY"
+      # If anything above failed, open an issue for DevOps.
+      - name: open an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" --title "promote failed: prod" --label cicd --assignee rohithvarmayadla \
+            --body "The timed promote of ${{ inputs.service }} to prod was not set, started by $GITHUB_ACTOR. Nothing moved. The run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  promote:
+    needs: [time, timer]
+    # It runs when nothing before it failed. A promote now skips the two jobs above.
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-24.04
+    # The environment holds PROMOTER_TOKEN and NAMESPACE: test, prod, or prod-at for a promote at a set time.
+    # prod waits for one of its reviewers. prod-at waits on its timer: prod's reviewer approved it at the start.
+    environment: ${{ inputs.at != '' && 'prod-at' || inputs.to }}
+    # One job per image you chose: every image for all, or only the one you picked.
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(inputs.service == 'all' && '["aem-interface-service","cas-interface-service","cornet-interface-service","job-scheduling"]' || format('["{0}"]', inputs.service)) }}
+    name: ${{ matrix.image }}
+    # Two promotes of the same image in the same environment never run at once. A timed one waits in a group
+    # of its own, so a promote or a rollback now is never held behind it.
+    concurrency:
+      group: promote-${{ inputs.at != '' && 'prod-at' || inputs.to }}-${{ matrix.image }}
+      cancel-in-progress: false
+    # TOOLS is where the tags live, and NAMESPACE where the environment runs. FROM is the tag to take:
+    # prod takes test; test takes dev, or the build you named.
+    env:
+      TOOLS: ${{ secrets.REGISTRY_NAMESPACE }}
+      NAMESPACE: ${{ secrets.NAMESPACE }}
+      TO: ${{ inputs.to }}
+      FROM: ${{ inputs.to == 'prod' && 'test' || inputs.build || 'dev' }}
+    steps:
+      # Install oc.
+      - uses: redhat-actions/openshift-tools-installer@37eb3cfb20ac2df6f0511ffa71cd917e4d49cabf # v3.1
+        with:
+          oc: "4"
+      # Sign in to the cluster as github-promoter.
+      - name: oc login
+        run: oc login --server="$CLUSTER_SERVER" --token="$PROMOTER_TOKEN"
+        env:
+          CLUSTER_SERVER: ${{ secrets.CLUSTER_SERVER }}
+          PROMOTER_TOKEN: ${{ secrets.PROMOTER_TOKEN }}
+      # Promote: keep what is there now as the backup, then move the tag to the new build.
+      - name: promote
+        if: inputs.action == 'promote'
+        run: |
+          oc tag "$TOOLS/${{ matrix.image }}:$TO" "$TOOLS/${{ matrix.image }}:$TO-backup" --reference-policy=local || echo "nothing to back up yet"
+          oc tag "$TOOLS/${{ matrix.image }}:$FROM" "$TOOLS/${{ matrix.image }}:$TO" --reference-policy=local
+      # Rollback: put the backup back.
+      - name: rollback
+        if: inputs.action == 'rollback'
+        run: oc tag "$TOOLS/${{ matrix.image }}:$TO-backup" "$TOOLS/${{ matrix.image }}:$TO" --reference-policy=local
+      # Check: wait until OpenShift runs the build the tag now names, in every Deployment and CronJob of the environment
+      # that runs this image, and each Deployment is ready: its own health checks pass. A CronJob runs the build from
+      # its next run. 10 minutes at most; if not, it fails here.
+      - name: check
+        timeout-minutes: 10
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          WANT=$(oc -n "$TOOLS" get istag "$IMAGE:$TO" -o jsonpath='{.image.metadata.name}')
+          RUNS=$({ oc -n "$NAMESPACE" get deploy -o jsonpath='{range .items[*]}deployment/{.metadata.name} {.spec.template.spec.containers[*].image}{"\n"}{end}'; oc -n "$NAMESPACE" get cronjob -o jsonpath='{range .items[*]}cronjob/{.metadata.name} {.spec.jobTemplate.spec.template.spec.containers[*].image}{"\n"}{end}' 2>/dev/null || true; } | grep "/${IMAGE}[@:]" | cut -d' ' -f1)
+          [ -n "$RUNS" ] || { echo "::error::Nothing in $TO runs $IMAGE."; exit 1; }
+          for D in $RUNS; do
+            P='{.spec.template.spec.containers[*].image}'; [ "${D%%/*}" = cronjob ] && P='{.spec.jobTemplate.spec.template.spec.containers[*].image}'
+            until oc -n "$NAMESPACE" get "$D" -o jsonpath="$P" | grep -q "@$WANT"; do sleep 10; done
+            if [ "${D%%/*}" = cronjob ]; then
+              echo "**${D#*/}** runs $IMAGE at \`$WANT\` in $TO from its next run." >> "$GITHUB_STEP_SUMMARY"
+            else
+              oc -n "$NAMESPACE" rollout status "$D" --timeout=10m
+              echo "**${D#*/}** runs $IMAGE at \`$WANT\` in $TO, and is ready." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+      # If anything above failed, open an issue for DevOps.
+      - name: open an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" --title "promote failed: ${{ inputs.to }}" --label cicd --assignee rohithvarmayadla \
+            --body "${{ inputs.action }} of ${{ matrix.image }} to ${{ inputs.to }} failed, or its build was not ready within 10 minutes, started by $GITHUB_ACTOR. The app team can roll back. The run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

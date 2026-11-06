@@ -1,0 +1,208 @@
+# Builds every merge into develop. For each image the merge touches: build once, scan, push to the tools
+# namespace as sha-<commit>, and move the dev tag to it.
+name: cd
+
+# When it runs: a merge into develop, a rebuild by hand, and the rebuild every Monday.
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch: {}
+  schedule:
+    - cron: '17 14 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    # The build environment holds BUILDER_TOKEN, and only develop may use it.
+    environment: build
+    # What it may do: read the code, write Trivy's findings to the Security tab, open an issue, and sign and keep the SBOM.
+    permissions:
+      contents: read
+      security-events: write
+      actions: read # the report step reads its own run
+      issues: write
+      id-token: write
+      attestations: write
+    # One line per image. context is the folder its Dockerfile's COPY paths start from.
+    # The steps below run once for each image.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: aem-interface-service, dockerfile: AEMInterfaceService/AEMInterfaceService/Dockerfile, context: ., watch: '{AEMInterfaceService,Shared.Database}/**' }
+          - { image: cas-interface-service, dockerfile: CASInterfaceService/CASInterfaceService/Dockerfile, context: ., watch: '{CASInterfaceService,Shared.Database}/**' }
+          - { image: cornet-interface-service, dockerfile: CornetInterfaceService/Dockerfile, context: ., watch: '{CornetInterfaceService,Shared.Database}/**' }
+          - { image: job-scheduling, dockerfile: job-scheduling/job-scheduling/openshift/Dockerfile, context: ., watch: '{job-scheduling,Shared.Database}/**' }
+    name: ${{ matrix.image }}
+    # Two builds of the same image never run at once.
+    concurrency:
+      group: cd-${{ matrix.image }}
+      cancel-in-progress: false
+    # Where the image goes. The registry and the namespace are GitHub secrets, never written here.
+    env:
+      REGISTRY: ${{ secrets.REGISTRY }}
+      IMAGE: ${{ secrets.REGISTRY }}/${{ secrets.REGISTRY_NAMESPACE }}/${{ matrix.image }}
+    steps:
+      # Get the code with its history: the step below compares with the commit before, and no token is left behind.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }
+      # Does this merge touch this image? A rebuild by hand and the Monday rebuild skip the question and build every image.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'push'
+        id: changed
+        with:
+          filters: |
+            yes: ['${{ matrix.watch }}', '${{ matrix.dockerfile }}', '.dockerignore', '.github/workflows/cd.yml']
+      # Build the image once, labelled with its commit.
+      - name: docker build
+        if: steps.changed.outputs.yes != 'false'
+        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.image }}:build --label org.opencontainers.image.revision="$GITHUB_SHA" ${{ matrix.context }}
+      # Scan it before it is pushed. This only reports: the image is pushed with what was found.
+      - name: Trivy
+        if: steps.changed.outputs.yes != 'false'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:build
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy.sarif
+          limit-severities-for-sarif: true
+      # Send Trivy's findings to GitHub, under Security → Code scanning.
+      - name: report to GitHub
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-${{ matrix.image }}
+      # Put what Trivy found on the run's Summary, as a table. It changes nothing else.
+      - name: findings on the summary
+        if: always() && hashFiles('trivy.sarif', 'trivy.txt') != ''
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          if [ -f trivy.sarif ]; then
+            N=$(jq '[.runs[].results[]] | length' trivy.sarif)
+            echo "### Trivy, $IMAGE: $N fixable HIGH or CRITICAL" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$N" -eq 0 ] || { echo "| CVE | Package | Installed | Fixed in | Severity |"; echo "|---|---|---|---|---|"; jq -r '.runs[].results[] | (.message.text | split("\n") | map(capture("^(?<key>[^:]+): (?<value>.*)$")?) | from_entries) as $m | "| \(.ruleId) | \($m.Package) | \($m["Installed Version"]) | \($m["Fixed Version"]) | \($m.Severity) |"' trivy.sarif | sort -u; } | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            { echo "### Trivy, $IMAGE"; echo '```'; cat trivy.txt; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      # Sign in to the registry as github-builder.
+      - name: docker login
+        if: steps.changed.outputs.yes != 'false'
+        run: echo "$BUILDER_TOKEN" | docker login "$REGISTRY" -u github-builder --password-stdin
+        env:
+          BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
+      # Push it as sha-<commit>, or sha-<commit>-r<run> for a rebuild, by hand or on Monday. Then move the dev tag to it.
+      - name: docker push
+        if: steps.changed.outputs.yes != 'false'
+        run: |
+          TAG=sha-${GITHUB_SHA::7}${{ github.event_name != 'push' && format('-r{0}', github.run_number) || '' }}
+          docker tag ${{ matrix.image }}:build "$IMAGE:$TAG"
+          docker tag ${{ matrix.image }}:build "$IMAGE:dev"
+          docker push "$IMAGE:$TAG"
+          docker push "$IMAGE:dev"
+          echo "**${{ matrix.image }}** pushed as \`$TAG\`, and the dev tag moved to it." >> "$GITHUB_STEP_SUMMARY"
+      # SBOM: list what is in the image.
+      - name: SBOM
+        if: steps.changed.outputs.yes != 'false'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:build
+          format: cyclonedx
+          output: sbom.cdx.json
+      # Read the digest the registry gave the image.
+      - id: digest
+        if: steps.changed.outputs.yes != 'false'
+        run: echo "digest=$(docker inspect --format '{{index .RepoDigests 0}}' ${{ matrix.image }}:build | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
+      # Sign the list and keep it in GitHub against that digest.
+      - name: keep the SBOM
+        if: steps.changed.outputs.yes != 'false'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ matrix.image }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          sbom-path: sbom.cdx.json
+      # If anything above failed, open an issue for DevOps.
+      - name: open an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" --title "cd failed: ${{ matrix.image }}" --label cicd --assignee rohithvarmayadla \
+            --body "${{ matrix.image }} was not built or not pushed, so the dev tag did not move. Or it was pushed, and its SBOM was not kept. The run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  # Read the code with SonarQube on every merge and every Monday, so 30 days never pass without a scan.
+  sonar:
+    runs-on: ubuntu-24.04
+    steps:
+      # Get the code with its history: SonarQube compares with what was there before.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }
+      # .NET code is read only while it is built. Set up the SDK the Dockerfile builds with.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0"
+      # Sonar's rules print each issue as a build warning. Keep them off the pull request: the Summary has the count and the link.
+      - name: no build warnings on the pull request
+        run: echo "::remove-matcher owner=csc::"
+      # Install SonarQube's scanner for .NET. Its version is kept by hand: Dependabot does not read this line.
+      - name: install the scanner
+        run: dotnet tool install --global dotnet-sonarscanner --version 11.3.0
+      # Begin: name the project, and say what to read and what to leave out. The token is a GitHub secret, and the address the variable SONAR_URL.
+      - name: SonarQube begin
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_URL }}
+        run: |
+          dotnet sonarscanner begin /k:"coast-utilities" /n:"coast utilities" \
+            /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN" /d:sonar.projectBaseDir="$GITHUB_WORKSPACE" \
+            /d:sonar.inclusions="**/AEMInterfaceService/**,**/CASInterfaceService/**,**/CornetInterfaceService/**,**/job-scheduling/**" \
+            /d:sonar.exclusions="**/node_modules/**,**/dist/**,**/.angular/**,**/obj/**,**/bin/**,**/coverage/**,**/*.spec.ts,**/*.test.ts"
+      # Build the .NET code. The scanner reads it as it compiles.
+      - name: dotnet build
+        run: |
+          dotnet build AEMInterfaceService
+          dotnet build CASInterfaceService
+          dotnet build CornetInterfaceService
+          dotnet build job-scheduling
+      # End: read the other files, and send everything to the Sonar server.
+      - name: SonarQube end
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+      # What Sonar found, on the run's Summary: the open issues by type, the quality gate and a link. It changes nothing else.
+      - name: Sonar on the summary
+        if: always() && vars.SONAR_URL != ''
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_URL }}
+          SONAR_URL: ${{ vars.SONAR_URL }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set +e
+          K=coast-utilities; W="$GITHUB_REF_NAME"; Q="projectKey=$K"
+          if [ -n "$PR" ]; then W="this pull request"; Q="$Q&pullRequest=$PR"; fi
+          LINK="${SONAR_URL%/}/dashboard?id=$K${PR:+&pullRequest=$PR}"
+          T=$(find . -name report-task.txt -not -path '*/node_modules/*' 2>/dev/null | head -1); TASK=""
+          [ -z "$T" ] || TASK=$(sed -n "s/^ceTaskUrl=//p" "$T")
+          [ -z "$TASK" ] || for i in $(seq 1 36); do S=$(curl -s -u "$SONAR_TOKEN:" "$TASK" | jq -r '.task.status // empty'); case "$S" in SUCCESS|FAILED|CANCELED) break;; esac; sleep 5; done
+          G=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?$Q" | jq -r '.projectStatus.status // "not read"')
+          case "$G" in OK) G=passed;; ERROR) G=failed;; esac
+          I=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/issues/search?componentKeys=$K${PR:+&pullRequest=$PR}&resolved=false&ps=1&facets=types")
+          N=$(echo "$I" | jq -r '.total // "?"')
+          C() { echo "$I" | jq -r --arg t "$1" '[.facets[]?.values[]? | select(.val == $t) | .count][0] // 0'; }
+          echo "### SonarQube, $W: $N open issues ($(C BUG) bugs, $(C VULNERABILITY) vulnerabilities, $(C CODE_SMELL) code smells). Quality gate: $G (reports only). [Open the results]($LINK)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # When the new build is in dev, ZAP visits dev: every build is scanned.
+  zap:
+    needs: build
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/zap.yml
+    with: { wait: 120 }

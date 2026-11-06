@@ -1,0 +1,158 @@
+# Checks every pull request into develop. For each image the pull request touches:
+# the Dockerfile check, the docker build, Trivy. SonarQube reads the code once. The last job, ci, is the one result for the whole pull request.
+name: ci
+
+# When it runs: a pull request into develop.
+on:
+  pull_request:
+    branches: [develop]
+
+# What it may do: read the code and the pull request, and write Trivy's findings to the Security tab.
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+  actions: read # the report step reads its own run
+
+# A new push to the pull request cancels the run before it.
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    # One line per image. context is the folder its Dockerfile's COPY paths start from.
+    # The steps below run once for each image.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: aem-interface-service, dockerfile: AEMInterfaceService/AEMInterfaceService/Dockerfile, context: ., watch: '{AEMInterfaceService,Shared.Database}/**' }
+          - { image: cas-interface-service, dockerfile: CASInterfaceService/CASInterfaceService/Dockerfile, context: ., watch: '{CASInterfaceService,Shared.Database}/**' }
+          - { image: cornet-interface-service, dockerfile: CornetInterfaceService/Dockerfile, context: ., watch: '{CornetInterfaceService,Shared.Database}/**' }
+          - { image: job-scheduling, dockerfile: job-scheduling/job-scheduling/openshift/Dockerfile, context: ., watch: '{job-scheduling,Shared.Database}/**' }
+    name: ${{ matrix.image }}
+    steps:
+      # Get the code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # Does this pull request touch this image? The steps below run only when it does.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: changed
+        with:
+          filters: |
+            yes: ['${{ matrix.watch }}', '${{ matrix.dockerfile }}', '.dockerignore', '.github/workflows/**']
+      # Check the Dockerfile with hadolint. Its findings are in the log and never stop the pull request.
+      - name: Dockerfile check
+        if: steps.changed.outputs.yes == 'true'
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint --no-fail - < ${{ matrix.dockerfile }}
+      # Build the image, the same way cd builds it.
+      - name: docker build
+        if: steps.changed.outputs.yes == 'true'
+        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.image }}:ci ${{ matrix.context }}
+      # Scan the image. It reports what it finds and never stops the pull request.
+      # From a fork, the findings are a table on the run's Summary only: a fork's token cannot write to the Security tab.
+      - name: Trivy
+        if: steps.changed.outputs.yes == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'sarif' || 'table' }}
+          output: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'trivy.sarif' || 'trivy.txt' }}
+          limit-severities-for-sarif: true
+      # Send Trivy's findings to GitHub, under Security → Code scanning.
+      - name: report to GitHub
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-${{ matrix.image }}
+      # Put what Trivy found on the run's Summary, as a table. It changes nothing else.
+      - name: findings on the summary
+        if: always() && hashFiles('trivy.sarif', 'trivy.txt') != ''
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          if [ -f trivy.sarif ]; then
+            N=$(jq '[.runs[].results[]] | length' trivy.sarif)
+            echo "### Trivy, $IMAGE: $N fixable HIGH or CRITICAL" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$N" -eq 0 ] || { echo "| CVE | Package | Installed | Fixed in | Severity |"; echo "|---|---|---|---|---|"; jq -r '.runs[].results[] | (.message.text | split("\n") | map(capture("^(?<key>[^:]+): (?<value>.*)$")?) | from_entries) as $m | "| \(.ruleId) | \($m.Package) | \($m["Installed Version"]) | \($m["Fixed Version"]) | \($m.Severity) |"' trivy.sarif | sort -u; } | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            { echo "### Trivy, $IMAGE"; echo '```'; cat trivy.txt; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Read the code with SonarQube. It reports on the Sonar server and never stops the pull request.
+  # Pull requests from Dependabot and from a fork cannot read the two secrets, so they are left out. Sonar reads that code after the merge, in cd.
+  sonar:
+    if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      # Get the code with its history: SonarQube compares with what was there before.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }
+      # .NET code is read only while it is built. Set up the SDK the Dockerfile builds with.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0"
+      # Sonar's rules print each issue as a build warning. Keep them off the pull request: the Summary has the count and the link.
+      - name: no build warnings on the pull request
+        run: echo "::remove-matcher owner=csc::"
+      # Install SonarQube's scanner for .NET. Its version is kept by hand: Dependabot does not read this line.
+      - name: install the scanner
+        run: dotnet tool install --global dotnet-sonarscanner --version 11.3.0
+      # Begin: name the project, and say what to read and what to leave out. The token is a GitHub secret, and the address the variable SONAR_URL.
+      - name: SonarQube begin
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_URL }}
+        run: |
+          dotnet sonarscanner begin /k:"coast-utilities" /n:"coast utilities" \
+            /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN" /d:sonar.projectBaseDir="$GITHUB_WORKSPACE" \
+            /d:sonar.inclusions="**/AEMInterfaceService/**,**/CASInterfaceService/**,**/CornetInterfaceService/**,**/job-scheduling/**" \
+            /d:sonar.exclusions="**/node_modules/**,**/dist/**,**/.angular/**,**/obj/**,**/bin/**,**/coverage/**,**/*.spec.ts,**/*.test.ts"
+      # Build the .NET code. The scanner reads it as it compiles.
+      - name: dotnet build
+        run: |
+          dotnet build AEMInterfaceService
+          dotnet build CASInterfaceService
+          dotnet build CornetInterfaceService
+          dotnet build job-scheduling
+      # End: read the other files, and send everything to the Sonar server.
+      - name: SonarQube end
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+      # What Sonar found, on the run's Summary: the open issues by type, the quality gate and a link. It changes nothing else.
+      - name: Sonar on the summary
+        if: always() && vars.SONAR_URL != ''
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_URL }}
+          SONAR_URL: ${{ vars.SONAR_URL }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set +e
+          K=coast-utilities; W="$GITHUB_REF_NAME"; Q="projectKey=$K"
+          if [ -n "$PR" ]; then W="this pull request"; Q="$Q&pullRequest=$PR"; fi
+          LINK="${SONAR_URL%/}/dashboard?id=$K${PR:+&pullRequest=$PR}"
+          T=$(find . -name report-task.txt -not -path '*/node_modules/*' 2>/dev/null | head -1); TASK=""
+          [ -z "$T" ] || TASK=$(sed -n "s/^ceTaskUrl=//p" "$T")
+          [ -z "$TASK" ] || for i in $(seq 1 36); do S=$(curl -s -u "$SONAR_TOKEN:" "$TASK" | jq -r '.task.status // empty'); case "$S" in SUCCESS|FAILED|CANCELED) break;; esac; sleep 5; done
+          G=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?$Q" | jq -r '.projectStatus.status // "not read"')
+          case "$G" in OK) G=passed;; ERROR) G=failed;; esac
+          I=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/issues/search?componentKeys=$K${PR:+&pullRequest=$PR}&resolved=false&ps=1&facets=types")
+          N=$(echo "$I" | jq -r '.total // "?"')
+          C() { echo "$I" | jq -r --arg t "$1" '[.facets[]?.values[]? | select(.val == $t) | .count][0] // 0'; }
+          echo "### SonarQube, $W: $N open issues ($(C BUG) bugs, $(C VULNERABILITY) vulnerabilities, $(C CODE_SMELL) code smells). Quality gate: $G (reports only). [Open the results]($LINK)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # One result for the whole pull request. It fails when any image above failed.
+  ci:
+    needs: build
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - if: needs.build.result != 'success'
+        run: exit 1

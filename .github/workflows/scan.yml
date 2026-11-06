@@ -1,0 +1,93 @@
+# Scans the image tagged prod, for each image, on the 1st and 15th of each month. New vulnerabilities are published
+# after an image was built, so this is how prod hears about them. It only reports: the fix is a new build, promoted.
+name: scan
+
+# When it runs: the 1st and 15th of each month, or by hand.
+on:
+  schedule:
+    - cron: '47 14 1,15 * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    # The build environment holds BUILDER_TOKEN, which can read the images in tools.
+    environment: build
+    # What it may do: read the code, write Trivy's findings to the Security tab, and open an issue.
+    permissions:
+      contents: read
+      security-events: write
+      actions: read # the report step reads its own run
+      issues: write
+    # One job per image.
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [aem-interface-service, cas-interface-service, cornet-interface-service, job-scheduling]
+    name: ${{ matrix.image }}
+    # Where the image is. The registry and the namespace are GitHub secrets, never written here.
+    env:
+      REGISTRY: ${{ secrets.REGISTRY }}
+      IMAGE: ${{ secrets.REGISTRY }}/${{ secrets.REGISTRY_NAMESPACE }}/${{ matrix.image }}
+    steps:
+      # Get the code, for its .trivyignore.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # Sign in to the registry as github-builder.
+      - name: docker login
+        run: echo "$BUILDER_TOKEN" | docker login "$REGISTRY" -u github-builder --password-stdin
+        env:
+          BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
+      # Pull the image tagged prod. An image with no prod tag yet has nothing to scan.
+      - name: docker pull
+        id: prod
+        run: |
+          docker pull -q "$IMAGE:prod" && docker tag "$IMAGE:prod" ${{ matrix.image }}:prod && echo "there=true" >> "$GITHUB_OUTPUT" \
+            || echo "::notice::${{ matrix.image }} has no prod tag yet"
+      # Scan it. This only reports and never fails the run.
+      - name: Trivy
+        if: steps.prod.outputs.there
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:prod
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy.sarif
+          limit-severities-for-sarif: true
+      # Put what Trivy found on the run's Summary, as a table. It changes nothing else.
+      - name: findings on the summary
+        if: always() && hashFiles('trivy.sarif', 'trivy.txt') != ''
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          if [ -f trivy.sarif ]; then
+            N=$(jq '[.runs[].results[]] | length' trivy.sarif)
+            echo "### Trivy, $IMAGE: $N fixable HIGH or CRITICAL" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$N" -eq 0 ] || { echo "| CVE | Package | Installed | Fixed in | Severity |"; echo "|---|---|---|---|---|"; jq -r '.runs[].results[] | (.message.text | split("\n") | map(capture("^(?<key>[^:]+): (?<value>.*)$")?) | from_entries) as $m | "| \(.ruleId) | \($m.Package) | \($m["Installed Version"]) | \($m["Fixed Version"]) | \($m.Severity) |"' trivy.sarif | sort -u; } | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            { echo "### Trivy, $IMAGE"; echo '```'; cat trivy.txt; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      # One open issue per image when the prod image has a fixable HIGH or CRITICAL: opened only when none is open.
+      - name: an issue when found
+        if: always() && hashFiles('trivy.sarif') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          N=$(jq '[.runs[].results[]] | length' trivy.sarif)
+          [ "$N" -gt 0 ] || exit 0
+          [ -z "$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"prod scan: $IMAGE\"" --json number --jq '.[0].number')" ] || exit 0
+          gh issue create -R "$GITHUB_REPOSITORY" --title "prod scan: $IMAGE" --label cicd \
+            --body "The prod image of $IMAGE has $N fixable HIGH or CRITICAL findings. The table is on the run's Summary: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      # If anything above failed, open an issue for DevOps.
+      - name: open an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" --title "prod scan could not run: ${{ matrix.image }}" --label cicd --assignee rohithvarmayadla \
+            --body "The scan of ${{ matrix.image }}:prod could not run. The run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

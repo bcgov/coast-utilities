@@ -1,0 +1,57 @@
+# Visits the running site in dev with OWASP ZAP and lists what it finds. The baseline scan only looks: it sends no attack.
+# The sector standard asks for it on every build before production, and at least every 6 months. Test and prod take a build already scanned here.
+name: zap
+
+# When it runs: called by cd when a new build is in dev, on 1 January and 1 July, or by hand.
+on:
+  workflow_call:
+    inputs:
+      wait:
+        description: seconds to wait first, while the new build starts
+        type: number
+        default: 0
+  workflow_dispatch: {}
+  schedule:
+    - cron: '27 15 1 1,7 *'
+
+# What it may do: read the code for its rules file, and open an issue.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  zap:
+    runs-on: ubuntu-24.04
+    # One job per address. The addresses are the GitHub variable ZAP_TARGETS, never written here.
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.ZAP_TARGETS) }}
+    name: ${{ matrix.target }}
+    steps:
+      # Get the code, for .zap/rules.tsv: the findings the team has looked at and accepted.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # Wait while the new build starts in dev.
+      - name: wait
+        if: inputs.wait > 0
+        run: sleep ${{ inputs.wait }}
+      # Scan. The full report is kept with the run. It reports and never fails the run.
+      - name: ZAP baseline
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: ${{ matrix.target }}
+          rules_file_name: .zap/rules.tsv
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: zap-report-${{ strategy.job-index }}
+      # One issue per address, for DevOps: opened only when ZAP found something and no issue for this address is open.
+      - name: one issue per address
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          [ "$(jq '[.site[].alerts[]] | length' report_json.json)" -gt 0 ] || exit 0
+          [ -z "$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"zap: $TARGET\"" --json number --jq '.[0].number')" ] || exit 0
+          gh issue create -R "$GITHUB_REPOSITORY" --title "zap: $TARGET" --assignee rohithvarmayadla \
+            --body "ZAP found warnings on $TARGET. The report is with the run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
