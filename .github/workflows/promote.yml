@@ -157,8 +157,10 @@ jobs:
           RUNS=$({ oc -n "$NAMESPACE" get deploy -o jsonpath='{range .items[*]}deployment/{.metadata.name} {.spec.template.spec.containers[*].image}{"\n"}{end}'; oc -n "$NAMESPACE" get cronjob -o jsonpath='{range .items[*]}cronjob/{.metadata.name} {.spec.jobTemplate.spec.template.spec.containers[*].image}{"\n"}{end}' 2>/dev/null || true; } | grep "/${IMAGE}[@:]" | cut -d' ' -f1)
           [ -n "$RUNS" ] || { echo "::error::Nothing in $TO runs $IMAGE."; exit 1; }
           for D in $RUNS; do
-            P='{.spec.template.spec.containers[*].image}'; [ "${D%%/*}" = cronjob ] && P='{.spec.jobTemplate.spec.template.spec.containers[*].image}'
-            until oc -n "$NAMESPACE" get "$D" -o jsonpath="$P" | grep -q "@$WANT"; do sleep 10; done
+            # A CronJob that names the tag itself pulls it at every run, so it already follows the move.
+            P='{.spec.template.spec.containers[*].image}'; M="@$WANT"
+            [ "${D%%/*}" = cronjob ] && P='{.spec.jobTemplate.spec.template.spec.containers[*].image}' && M="@$WANT|/$IMAGE:$TO( |\$)"
+            until oc -n "$NAMESPACE" get "$D" -o jsonpath="$P" | grep -qE "$M"; do sleep 10; done
             if [ "${D%%/*}" = cronjob ]; then
               echo "**${D#*/}** runs $IMAGE at \`$WANT\` in $TO from its next run." >> "$GITHUB_STEP_SUMMARY"
             else
