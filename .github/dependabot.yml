@@ -1,47 +1,33 @@
-# .github/dependabot.yml — version updates: actions + nuget + docker (no npm here).
-# Small (patch/minor) updates ONLY — majors are ignored everywhere, so big jumps
-# (.NET majors) arrive as security ALERTS to plan, never as surprise PRs.
-# One grouped PR per ecosystem, monthly, assigned for notification. CVE
-# security-update PRs come from the repo security toggles and respect the same
-# ignore-majors rules. Docker block keeps the digest-pinned FROMs fresh.
+# Which updates Dependabot proposes, and how often.
+# Each pull request goes to its owner: for an action the workflows are pinned to and for a base image a
+# Dockerfile starts from, DevOps; for a package, the Technical Lead. Images and packages are minor and patch
+# only: a major is planned with the team. Dependabot looks every day: the sector standard asks for daily.
 version: 2
 updates:
+  # The actions in .github/workflows
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: monthly
-    assignees: ["rohithvarmayadla"]
+    schedule: { interval: daily }
+    assignees: [rohithvarmayadla]
     groups:
-      actions:
-        patterns: ["*"]
-
-  # Glob so all four services + Shared.Database are covered
-  - package-ecosystem: nuget
-    directories: ["/**/*"]
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 5
-    assignees: ["rohithvarmayadla"]
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-    groups:
-      nuget-safe:
-        patterns: ["*"]
-
-  # The four CD-built service Dockerfiles
+      actions: { patterns: ["*"] }
+  # The base images in each Dockerfile
   - package-ecosystem: docker
-    directories:
-      - /CornetInterfaceService
-      - /AEMInterfaceService/AEMInterfaceService
-      - /CASInterfaceService/CASInterfaceService
-      - /job-scheduling/job-scheduling/openshift
-    schedule:
-      interval: monthly
-    assignees: ["rohithvarmayadla"]
+    directories: ["/AEMInterfaceService/AEMInterfaceService", "/CASInterfaceService/CASInterfaceService", "/CornetInterfaceService", "/job-scheduling/job-scheduling/openshift"]
+    schedule: { interval: daily }
+    assignees: [rohithvarmayadla]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
     groups:
-      docker:
-        patterns: ["*"]
+      docker: { patterns: ["*"] }
+  # The NuGet packages of the .NET apps
+  - package-ecosystem: nuget
+    directories: ["/AEMInterfaceService", "/CASInterfaceService", "/CornetInterfaceService", "/job-scheduling"]
+    schedule: { interval: daily }
+    assignees: [GeorgeWalker]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      nuget: { patterns: ["*"] }

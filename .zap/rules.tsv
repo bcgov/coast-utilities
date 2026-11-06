@@ -1,0 +1,3 @@
+# ZAP alert filters for coast-utilities, read by .github/workflows/zap.yml.
+# Format: {alertId}<TAB>{IGNORE|OUTOFSCOPE|FAIL}<TAB>{why}. Reference: https://www.zaproxy.org/docs/docker/baseline-scan/
+# Empty on purpose: every finding is reported until the Technical Lead reviews it and adds a line here with the reason.
