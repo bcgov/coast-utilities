@@ -94,7 +94,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 0, persist-credentials: false }
       # .NET code is read only while it is built. Set up the SDK the Dockerfile builds with.
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - id: dotnet
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0"
       # Sonar's rules print each issue as a build warning. Keep them off the pull request: the Summary has the count and the link.
@@ -113,6 +114,10 @@ jobs:
             /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN" /d:sonar.projectBaseDir="$GITHUB_WORKSPACE" \
             /d:sonar.inclusions="**/AEMInterfaceService/**,**/CASInterfaceService/**,**/CornetInterfaceService/**,**/job-scheduling/**" \
             /d:sonar.exclusions="**/node_modules/**,**/dist/**,**/.angular/**,**/obj/**,**/bin/**,**/coverage/**,**/*.spec.ts,**/*.test.ts"
+      # The runner holds newer SDKs too, and dotnet builds with the newest unless a global.json names one.
+      # Name the SDK set up above, the one the Dockerfile builds with.
+      - name: build with the SDK set up above
+        run: dotnet new globaljson --sdk-version "${{ steps.dotnet.outputs.dotnet-version }}" --force
       # Build the .NET code. The scanner reads it as it compiles.
       - name: dotnet build
         run: |
