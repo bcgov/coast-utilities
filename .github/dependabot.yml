@@ -21,13 +21,50 @@ updates:
         update-types: ["version-update:semver-major"]
     groups:
       docker: { patterns: ["*"] }
-  # The NuGet packages of the .NET apps
+  # The NuGet packages of the .NET apps, one section for each, so that each daily run stays short
+  # aem-interface-service
   - package-ecosystem: nuget
-    directories: ["/AEMInterfaceService", "/CASInterfaceService", "/CornetInterfaceService", "/job-scheduling"]
+    directories: ["/AEMInterfaceService"]
     schedule: { interval: daily }
     assignees: [GeorgeWalker]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
     groups:
-      nuget: { patterns: ["*"] }
+      nuget-aem-interface-service: { patterns: ["*"] }
+  # cas-interface-service
+  - package-ecosystem: nuget
+    directories: ["/CASInterfaceService"]
+    schedule: { interval: daily }
+    assignees: [GeorgeWalker]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      nuget-cas-interface-service: { patterns: ["*"] }
+  # cornet-interface-service
+  - package-ecosystem: nuget
+    directories: ["/CornetInterfaceService"]
+    schedule: { interval: daily }
+    assignees: [GeorgeWalker]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      nuget-cornet-interface-service: { patterns: ["*"] }
+  # job-scheduling
+  - package-ecosystem: nuget
+    directories: ["/job-scheduling"]
+    schedule: { interval: daily }
+    assignees: [GeorgeWalker]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      nuget-job-scheduling: { patterns: ["*"] }
+  # Security fixes only for the other folders with NuGet packages: each fix still goes to its owner, and no daily pull request is opened
+  - package-ecosystem: nuget
+    directories: ["/AEMInterfaceService/AEMInterfaceService", "/CASInterfaceService/CASInterfaceService", "/CornetInterfaceService/CornetInterfaceService", "/Shared.Database", "/job-scheduling/job-scheduling"]
+    schedule: { interval: daily }
+    open-pull-requests-limit: 0
+    assignees: [GeorgeWalker]
