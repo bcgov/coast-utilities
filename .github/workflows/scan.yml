@@ -26,6 +26,11 @@ jobs:
       matrix:
         image: [aem-interface-service, cas-interface-service, cornet-interface-service, job-scheduling]
     name: ${{ matrix.image }}
+    # One scan of an image at a time, from the schedule or by hand, so an older result never closes an issue that a
+    # newer one wrote on. A run that comes in while one is going waits for it, and only the newest of those waiting runs.
+    concurrency:
+      group: prod-scan-${{ matrix.image }}
+      cancel-in-progress: false
     # Where the image is. The registry and the namespace are GitHub secrets, never written here.
     env:
       REGISTRY: ${{ secrets.REGISTRY }}

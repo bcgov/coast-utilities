@@ -28,6 +28,11 @@ jobs:
       matrix:
         target: ${{ fromJSON(vars.ZAP_TARGETS) }}
     name: ${{ matrix.target }}
+    # One scan of an address at a time, whether cd, the schedule or a person started it, so an older result never closes
+    # an issue that a newer one wrote on. A run that comes in while one is going waits for it, and only the newest waiting runs.
+    concurrency:
+      group: zap-${{ matrix.target }}
+      cancel-in-progress: false
     steps:
       # Get the code, for .zap/rules.tsv: the findings the team has looked at and accepted.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
