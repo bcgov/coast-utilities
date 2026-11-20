@@ -16,11 +16,9 @@ jobs:
     runs-on: ubuntu-24.04
     # The build environment holds BUILDER_TOKEN, which can read the images in tools.
     environment: build
-    # What it may do: read the code, write Trivy's findings to the Security tab, and open an issue.
+    # What it may do: read the code, and open, add to or close its issue.
     permissions:
       contents: read
-      security-events: write
-      actions: read # the report step reads its own run
       issues: write
     # One job per image.
     strategy:
@@ -28,6 +26,11 @@ jobs:
       matrix:
         image: [aem-interface-service, cas-interface-service, cornet-interface-service, job-scheduling]
     name: ${{ matrix.image }}
+    # One scan of an image at a time, from the schedule or by hand, so an older result never closes an issue that a
+    # newer one wrote on. A run that comes in while one is going waits for it, and only the newest of those waiting runs.
+    concurrency:
+      group: prod-scan-${{ matrix.image }}
+      cancel-in-progress: false
     # Where the image is. The registry and the namespace are GitHub secrets, never written here.
     env:
       REGISTRY: ${{ secrets.REGISTRY }}
@@ -49,6 +52,7 @@ jobs:
             || echo "::notice::${{ matrix.image }} has no prod tag yet"
       # Scan it. This only reports and never fails the run.
       - name: Trivy
+        id: trivy
         if: steps.prod.outputs.there
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -71,18 +75,27 @@ jobs:
           else
             { echo "### Trivy, $IMAGE"; echo '```'; cat trivy.txt; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
           fi
-      # One open issue per image when the prod image has a fixable HIGH or CRITICAL: opened only when none is open.
-      - name: an issue when found
-        if: always() && hashFiles('trivy.sarif') != ''
+      # One issue per image for its fixable HIGH and CRITICAL: each scan that ran to the end adds its count, and one that
+      # finds none closes it. A scan that failed counts nothing here; the step below opens its own issue.
+      - name: its issue
+        if: always() && steps.trivy.outcome == 'success' && hashFiles('trivy.sarif') != ''
         env:
           GH_TOKEN: ${{ github.token }}
           IMAGE: ${{ matrix.image }}
         run: |
-          N=$(jq '[.runs[].results[]] | length' trivy.sarif)
-          [ "$N" -gt 0 ] || exit 0
-          [ -z "$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"prod scan: $IMAGE\"" --json number --jq '.[0].number')" ] || exit 0
-          gh issue create -R "$GITHUB_REPOSITORY" --title "prod scan: $IMAGE" --label cicd \
-            --body "The prod image of $IMAGE has $N fixable HIGH or CRITICAL findings. The table is on the run's Summary: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          # Count each weakness once, by its rating, however many places in the image hold it.
+          COUNT='[.runs[].results[] | {r: .ruleId, s: (.message.text | capture("Severity: (?<s>[A-Z]+)").s)}] | unique'
+          C=$(jq "$COUNT | map(select(.s == \"CRITICAL\")) | length" trivy.sarif)
+          H=$(jq "$COUNT | map(select(.s == \"HIGH\")) | length" trivy.sarif)
+          DAY=$(date -u +%Y-%m-%d)
+          OPEN=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"prod scan: $IMAGE\"" --json number,title --jq "[.[] | select(.title == \"prod scan: $IMAGE\") | .number][0] // empty")
+          if [ $((C + H)) -eq 0 ]; then
+            [ -z "$OPEN" ] || gh issue close "$OPEN" -R "$GITHUB_REPOSITORY" --comment "The scan of $DAY found none."
+            exit 0
+          fi
+          SAID="The scan of $DAY found $C CRITICAL and $H HIGH with a fix. The table is on the run's Summary: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ -n "$OPEN" ]; then gh issue comment "$OPEN" -R "$GITHUB_REPOSITORY" --body "$SAID"
+          else gh issue create -R "$GITHUB_REPOSITORY" --title "prod scan: $IMAGE" --label cicd --body "$SAID"; fi
       # If anything above failed, open an issue for DevOps.
       - name: open an issue
         if: failure()
