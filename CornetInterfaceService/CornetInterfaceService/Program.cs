@@ -16,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Serilog;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
@@ -127,7 +127,7 @@ try
     });
 
     builder.Services.AddHealthChecks();
-    
+
     builder.Services.AddDynamicsTokenProvider();
 
     // Owns CORNET → Dynamics payload mapping, token use, the outbound call, and response parsing,
@@ -255,14 +255,9 @@ try
                 In = ParameterLocation.Header,
                 Description = "Enter your JWT token (without the 'Bearer ' prefix).",
             });
-            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
             {
-                [
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference { Id = "Basic", Type = ReferenceType.SecurityScheme },
-                    }
-                ] = [],
+                [new OpenApiSecuritySchemeReference("Basic", document)] = [],
             });
         });
     }
