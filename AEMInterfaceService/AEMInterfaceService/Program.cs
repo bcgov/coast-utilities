@@ -11,7 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Serilog;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
@@ -179,14 +179,9 @@ try
                 In = ParameterLocation.Header,
                 Description = "Enter your JWT token (without the 'Bearer ' prefix).",
             });
-            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
             {
-                [
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference { Id = "Bearer", Type = ReferenceType.SecurityScheme },
-                    }
-                ] = [],
+                [new OpenApiSecuritySchemeReference("Bearer", document)] = [],
             });
         });
     }
